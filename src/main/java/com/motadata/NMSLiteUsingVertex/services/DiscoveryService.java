@@ -7,6 +7,9 @@ import io.vertx.sqlclient.Pool;
 import io.vertx.sqlclient.Row;
 import io.vertx.sqlclient.Tuple;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class DiscoveryService {
   private final Pool pool;
 
@@ -31,10 +34,15 @@ public class DiscoveryService {
       });
   }
 
+  public Future<Void> save(JsonObject payload){
 
+    String ip = payload.getString("ip");
+    Integer credential_id = payload.getInteger("credential_id");
+    String port = payload.getString("port");
 
-
-
-
+    return pool.preparedQuery("INSERT INTO object (ip, credential_id, port) VALUES ($1, $2, $3)")
+      .execute(Tuple.of(ip, credential_id, port))
+      .mapEmpty();
+  }
 
 }

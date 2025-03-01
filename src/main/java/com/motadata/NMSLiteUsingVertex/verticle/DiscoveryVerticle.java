@@ -1,14 +1,11 @@
 package com.motadata.NMSLiteUsingVertex.verticle;
 
 import com.motadata.NMSLiteUsingVertex.config.ZMQConfig;
-import com.motadata.NMSLiteUsingVertex.services.CredentialService;
 import com.motadata.NMSLiteUsingVertex.services.DiscoveryService;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Future;
 import io.vertx.core.eventbus.Message;
 import io.vertx.core.json.JsonObject;
-import org.json.JSONException;
-import org.json.JSONObject;
 import org.zeromq.ZMQ;
 
 public class DiscoveryVerticle extends AbstractVerticle {
@@ -16,6 +13,7 @@ public class DiscoveryVerticle extends AbstractVerticle {
 
   @Override
   public void start() {
+    System.out.println("DiscoveryVerticle deploy on : " + Thread.currentThread().getName());
     discoveryService = new DiscoveryService(vertx);
     vertx.eventBus().consumer("discovery.verticle", this::discovery);
   }
@@ -35,15 +33,14 @@ public class DiscoveryVerticle extends AbstractVerticle {
               .put("password",credential.getString("password"))
               .put("event_name","discovery")
               .put("plugin_engine","linux");
-
             checkDiscovery(payload)
-              .onSuccess(response -> promise.complete(response))
+              .onSuccess(promise::complete)
               .onFailure(promise::fail);
-
           }, result -> {
             if (result.succeeded()) {
-
-              message.reply(result.result());
+              discoveryService.save(payload)
+                  .onSuccess(responce->message.reply(result.result()))
+                  .onFailure(err->message.reply("failed to added object "+err.getMessage()));
             } else {
               message.reply(result.result());
             }
@@ -72,7 +69,6 @@ public class DiscoveryVerticle extends AbstractVerticle {
       return Future.failedFuture("ZMQ communication failed: " + e.getMessage());
     }
   }
-
-  }
+}
 
 

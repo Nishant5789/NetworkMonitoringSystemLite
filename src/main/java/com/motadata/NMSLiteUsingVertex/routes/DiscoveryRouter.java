@@ -18,7 +18,7 @@ public class DiscoveryRouter {
       .request("discovery.verticle",ctx.body().asJsonObject(),
         reply-> {
         if(reply.succeeded()){
-          ctx.response().setStatusCode(200).end((String) reply.result().body());
+          ctx.response().setStatusCode(201).end((String) reply.result().body());
 //          ctx.response().setStatusCode(200).end(((JsonObject) reply.result().body()).encodePrettily());
         }
         else{
@@ -26,16 +26,8 @@ public class DiscoveryRouter {
         }
     }));
 
+    router.get("/").handler(ctx->ctx.response().setStatusCode(200).end("work"));
+
     return router;
-  }
-
-  private void saveDiscovery(RoutingContext ctx) {
-    JsonObject payload = ctx.body().asJsonObject();
-    String id = payload.getString("id");
-    String port = payload.getString("port");
-    String credential_id = payload.getString("credential_id");
-    String status = payload.getString("status");
-
-
   }
 }

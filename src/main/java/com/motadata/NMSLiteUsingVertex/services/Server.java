@@ -14,12 +14,10 @@ public class Server extends AbstractVerticle {
     Router mainRouter = Router.router(vertx);
     mainRouter.route().handler(BodyHandler.create());
 
-    // Mount sub-routers with specific paths
-    mainRouter.mountSubRouter("/api/credentials", new CredentialsRouter(vertx).getRouter());
-    mainRouter.mountSubRouter("/api/discovery", new DiscoveryRouter(vertx).getRouter());
-    mainRouter.mountSubRouter("/api/objects", new ObjectRouter().getRouter(vertx));
+    mainRouter.route("/api/credentials/*").subRouter(new CredentialsRouter(vertx).getRouter());
+    mainRouter.route("/api/discovery/*").subRouter(new DiscoveryRouter(vertx).getRouter());
+    mainRouter.route("/api/objects/*").subRouter(new ObjectRouter(vertx).getRouter());
 
-    // Add a root handler
     mainRouter.route("/").handler(ctx -> {
       ctx.response()
         .putHeader("content-type", "text/plain")

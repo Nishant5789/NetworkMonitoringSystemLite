@@ -7,7 +7,7 @@ import io.vertx.core.Promise;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 
-public class utils {
+public class Utils {
   public static Future<Boolean> ping(String ip)
   {
       return Main.vertx().executeBlocking(()->
