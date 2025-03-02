@@ -33,7 +33,7 @@ public class ObjectService {
       .collect(Collectors.joining(","));
 
     String sql = "SELECT o.id, o.ip, o.port, c.username, c.password " + "FROM object o " +
-      "INNER JOIN credential c ON o.credentiali_d = c.id " +
+      "INNER JOIN credential c ON o.credential_id = c.id " +
       "WHERE o.id IN (" + placeholders + ")";
 
     Tuple params = Tuple.tuple();

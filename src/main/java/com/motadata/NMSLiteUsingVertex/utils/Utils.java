@@ -15,6 +15,7 @@ public class Utils {
         try {
           String pingCommand = "ping -c 2 " + ip;
 
+          System.out.println("execute command: " + pingCommand);
           ProcessBuilder processBuilder = new ProcessBuilder(pingCommand.split(" "));
           Process process = processBuilder.start();
 
@@ -30,9 +31,11 @@ public class Utils {
           int exitCode = process.waitFor();
 
           if(exitCode == 0){
+            System.out.println("ping command is sucessful for ip: " + ip);
             return  true;
           }
           else{
+            System.out.println("ping command is unsucessful for ip: " + ip);
             return  false;
           }
         } catch (Exception e) {
@@ -50,11 +53,12 @@ public class Utils {
       {
         if (res.succeeded())
         {
+          System.out.println("sucessful tcp connection for ip: "+ ip +"port: " + port);
           promise.complete(true);
         }
         else
         {
-          System.out.println("Failed to connect to ip "+": " + port + "- " +res.cause().getMessage());
+          System.out.println("failed tcp connection for ip: "+ ip +"port: " + port +" "+res.cause().getMessage());
           promise.complete(false);
         }
       });

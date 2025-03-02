@@ -1,6 +1,6 @@
 package com.motadata.NMSLiteUsingVertex.verticle;
 
-import com.motadata.NMSLiteUsingVertex.services.DiscoveryService;
+import com.motadata.NMSLiteUsingVertex.Main;
 import com.motadata.NMSLiteUsingVertex.services.ObjectService;
 import com.motadata.NMSLiteUsingVertex.utils.Utils;
 import io.vertx.core.AbstractVerticle;
@@ -27,6 +27,7 @@ public class ObjectVerticle extends AbstractVerticle {
   private void provision(Message<Object> message) {
     JsonObject payload = (JsonObject) message.body();
     JsonArray object_ids = payload.getJsonArray("object_ids");
+    String  pollInterval = payload.getString("pollInterval");
 
     objectService.getAllObjects(object_ids).onSuccess(objects->{
 
@@ -37,26 +38,27 @@ public class ObjectVerticle extends AbstractVerticle {
         checkDeviceAvailability(ip,port)
           .onSuccess(flag->{
             if(flag){
-              deviceQueue.add(object);
+              deviceQueue.add(object.put("lastPollTime",System.currentTimeMillis()));
+              System.out.println("Device's ip: " +ip+ "added in deviceQueue");
             }
             else{
               System.out.println("Device's ip: " +ip+ " with Port: " +port+  "is not reachable");
             }
           })
           .onFailure(err->{
-            System.out.println("Device " +ip+ "not available: " + err.getMessage());
+            System.out.println("Device " + ip + " not available: " + err.getMessage());
           });
       }
-
+      handleDeviceScheduling(Integer.parseInt(pollInterval));
       message.reply(new JsonObject().put("message", "Polling is started for provisioned device").toString());
     });
   }
-//  scheduler()
+
   // Checks if the device IP is reachable and if the port is open
   private Future<Boolean> checkDeviceAvailability(String ip, String port) {
     try {
-      return Utils.ping(ip).compose(isReachable -> {
-        if (isReachable) {
+      return Utils.ping(ip).compose(isPingReachable -> {
+        if (isPingReachable) {
           return Utils.checkPort(ip, port);
         }
         else {
@@ -70,10 +72,40 @@ public class ObjectVerticle extends AbstractVerticle {
   }
 
   // schedule device polling
-  private void scheduler(String event, int pollInterval){
+  private void handleDeviceScheduling(int pollInterval) {
+    Main.vertx().setTimer(5000,timeId->{
+      System.out.println("polling is start devicequeue : "+deviceQueue);
+      long currentTime = System.currentTimeMillis();
+      JsonArray devicesToPoll = new JsonArray();
 
+      for (JsonObject device : deviceQueue)
+      {
+        long lastPollTime = device.getLong("lastPollTime");
+        long timeSinceLastPoll = currentTime - lastPollTime;
+
+        if (timeSinceLastPoll >= pollInterval)
+        {
+          // Update last poll time
+          device.put("lastPollTime", currentTime);
+          devicesToPoll.add(device);
+          System.out.println("devices send for  polling: " + devicesToPoll.encodePrettily());
+          handleDevicePolling(devicesToPoll);
+         }
+        }
+      });
   }
 
-
+  // handle device polling
+  private void handleDevicePolling(JsonArray devicesToPoll){
+      Main.vertx().eventBus().request("poller.verticle", devicesToPoll,
+        result-> {
+          if(result.succeeded()){
+            System.out.println("Polling is completed");
+          }
+          else{
+            System.out.println("Failed to run polling");
+          }
+        });
+  }
 
 }
