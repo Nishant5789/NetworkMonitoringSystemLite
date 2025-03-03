@@ -1,31 +1,53 @@
-= Nmsliteusingvertex
+Below is a concise `README.md` file for your **NMSLite** GitHub repository, providing an overview of your project. This README summarizes the project’s purpose, key features, and structure, focusing on the essential points for someone discovering your repository.
 
-image:https://img.shields.io/badge/vert.x-4.5.13-purple.svg[link="https://vertx.io"]
+---
 
-This application was generated using http://start.vertx.io
+# NMSLite
 
-== Building
+**NMSLite** is a lightweight Network Management System (NMS) designed to discover and monitor network devices such as Linux, Windows, and SNMP-enabled devices. Built with Vert.x and PostgreSQL, it provides an efficient, event-driven solution for collecting and storing system metrics like CPU usage, memory, disk, and network statistics.
 
-To launch your tests:
-```
-./mvnw clean test
-```
+## Overview
+NMSLite aims to simplify network device monitoring by offering device discovery, metrics collection, and storage in a scalable architecture. It leverages Vert.x for asynchronous operations and PostgreSQL for persistent storage, making it suitable for small to medium-sized networks.
 
-To package your application:
-```
-./mvnw clean package
-```
+### Key Features
+- **Device Discovery**: Identifies devices (Linux, Windows, SNMP) using IP, port, and credentials via SSH or SNMP.
+- **Metrics Collection**: Gathers detailed system metrics (e.g., CPU, memory, disk usage, network stats).
+- **Event-Driven Architecture**: Built on Vert.x, enabling high-performance, non-blocking operations.
+- **PostgreSQL Storage**: Stores device information, credentials, and metrics in a structured database.
+- **REST API**: Exposes endpoints for device discovery and management.
 
-To run your application:
-```
-./mvnw clean compile exec:java
-```
+### Technologies Used
+- **Vert.x**: For asynchronous, event-driven processing.
+- **PostgreSQL**: For data persistence.
+- **Java**: Main programming language (Vert.x 4.x, Java 11+).
 
-== Help
+### Project Structure
+- **Verticles**:
+  - `SenderVerticle`: Handles REST API requests and sends discovery tasks via the event bus.
+  - `ConsumerVerticle`: Processes discovery tasks, collects metrics, and saves results to the database.
+- **Database Schema**:
+  - `credential`: Stores device credentials.
+  - `monitored_device`: Stores discovered device information.
+  - `linux_counter_result`, `windows_counter_result`, `snmp_device_counter_result`: Stores metrics for respective device types.
+  - `poller_result`: Maps devices to their metrics.
+- **QueryHandler**: A utility class for generalized CRUD operations on PostgreSQL tables.
 
-* https://vertx.io/docs/[Vert.x Documentation]
-* https://stackoverflow.com/questions/tagged/vert.x?sort=newest&pageSize=15[Vert.x Stack Overflow]
-* https://groups.google.com/forum/?fromgroups#!forum/vertx[Vert.x User Group]
-* https://discord.gg/6ry7aqPWXy[Vert.x Discord]
+### How It Works
+1. **Discovery**: The REST API triggers device discovery by sending IP, port, and credential details to the event bus.
+2. **Metrics Collection**: Verticles process discovery tasks, collect metrics via SSH/SNMP, and store results in PostgreSQL.
+3. **Storage**: Metrics are saved in type-specific tables (`linux_counter_result`, etc.) and linked to devices via `poller_result`.
 
+## Getting Started
+Refer to the full `README.md` (to be expanded) for setup, usage, and contribution guidelines. Clone the repository and follow the instructions to set up PostgreSQL, install dependencies, and run the application.
 
+## License
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+### Notes
+- This README provides a high-level overview without diving into setup or usage details, as requested.
+- You can expand sections like "Getting Started" or add links to detailed documentation as needed.
+- Adjust the license section based on your actual licensing choice (MIT is assumed here).
+
+Let me know if you’d like to expand any section further!
