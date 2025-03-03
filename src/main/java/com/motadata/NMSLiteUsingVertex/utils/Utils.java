@@ -8,6 +8,7 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 
 public class Utils {
+
   public static Future<Boolean> ping(String ip)
   {
       return Main.vertx().executeBlocking(()->
@@ -71,4 +72,21 @@ public class Utils {
 
     return promise.future();
   }
+
+  public static Future<Boolean> checkDeviceAvailability(String ip, String port) {
+    try {
+      return ping(ip).compose(isPingReachable -> {
+        if (isPingReachable) {
+          return checkPort(ip, port);
+        }
+        else {
+          return Future.failedFuture("Device is not reachable");
+        }
+      });
+    }
+    catch (Exception exception) {
+      return Future.failedFuture("Failed to check device availability. " + exception.getMessage());
+    }
+  }
+
 }

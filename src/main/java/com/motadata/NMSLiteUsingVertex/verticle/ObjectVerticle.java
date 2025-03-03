@@ -1,10 +1,9 @@
 package com.motadata.NMSLiteUsingVertex.verticle;
 
 import com.motadata.NMSLiteUsingVertex.Main;
-import com.motadata.NMSLiteUsingVertex.services.ObjectService;
+import com.motadata.NMSLiteUsingVertex.database.QueryHandler;
 import com.motadata.NMSLiteUsingVertex.utils.Utils;
 import io.vertx.core.AbstractVerticle;
-import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.eventbus.Message;
 import io.vertx.core.json.JsonArray;
@@ -15,27 +14,29 @@ import java.util.Queue;
 
 public class ObjectVerticle extends AbstractVerticle {
   public static final Queue<JsonObject> deviceQueue = new LinkedList<>();
-  ObjectService objectService;
 
   @Override
   public void start(Promise<Void> startPromise) throws Exception {
     System.out.println("ObjectVerticle deploy on : " + Thread.currentThread().getName());
-    objectService = new ObjectService(vertx);
     vertx.eventBus().consumer("provision", this::provision);
+    vertx.eventBus().consumer("objectPollingData",this::getPollerResult);
   }
 
+  private void getPollerResult(Message<Object> message) {
+         }
+
+  // handle provision
   private void provision(Message<Object> message) {
     JsonObject payload = (JsonObject) message.body();
     JsonArray object_ids = payload.getJsonArray("object_ids");
     String  pollInterval = payload.getString("pollInterval");
 
-    objectService.getAllObjects(object_ids).onSuccess(objects->{
+     QueryHandler.getAllByIds("monitored_device",object_ids).onSuccess(objects->{
 
       for(JsonObject object : objects){
         String ip = object.getString("ip");
         String port = object.getString("port");
-
-        checkDeviceAvailability(ip,port)
+        Utils.checkDeviceAvailability(ip,port)
           .onSuccess(flag->{
             if(flag){
               deviceQueue.add(object.put("lastPollTime",System.currentTimeMillis()));
@@ -50,30 +51,13 @@ public class ObjectVerticle extends AbstractVerticle {
           });
       }
       handleDeviceScheduling(Integer.parseInt(pollInterval));
-      message.reply(new JsonObject().put("message", "Polling is started for provisioned device").toString());
+      message.reply(new JsonObject().put("message", "Polling is started for provisioned device"));
     });
-  }
-
-  // Checks if the device IP is reachable and if the port is open
-  private Future<Boolean> checkDeviceAvailability(String ip, String port) {
-    try {
-      return Utils.ping(ip).compose(isPingReachable -> {
-        if (isPingReachable) {
-          return Utils.checkPort(ip, port);
-        }
-        else {
-          return Future.failedFuture("Device is not reachable");
-        }
-      });
-    }
-    catch (Exception exception) {
-      return Future.failedFuture("Failed to check device availability. " + exception.getMessage());
-    }
   }
 
   // schedule device polling
   private void handleDeviceScheduling(int pollInterval) {
-    Main.vertx().setTimer(5000,timeId->{
+    Main.vertx().setTimer(4000,timeId->{
       System.out.println("polling is start devicequeue : "+deviceQueue);
       long currentTime = System.currentTimeMillis();
       JsonArray devicesToPoll = new JsonArray();

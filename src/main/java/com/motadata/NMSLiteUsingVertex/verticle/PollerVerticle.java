@@ -1,7 +1,7 @@
 package com.motadata.NMSLiteUsingVertex.verticle;
 
 import com.motadata.NMSLiteUsingVertex.config.ZMQConfig;
-import com.motadata.NMSLiteUsingVertex.services.PollerService;
+import com.motadata.NMSLiteUsingVertex.database.QueryHandler;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Promise;
 import io.vertx.core.eventbus.Message;
@@ -13,11 +13,8 @@ import java.io.FileWriter;
 import java.io.IOException;
 
 public class PollerVerticle extends AbstractVerticle {
-
-  private static PollerService pollerService;
   @Override
   public void start(Promise<Void> startPromise) throws Exception {
-      pollerService = new PollerService(vertx);
       vertx.eventBus().consumer("poller.verticle",this::handlePolling);
   }
 
@@ -26,11 +23,11 @@ public class PollerVerticle extends AbstractVerticle {
     JsonArray devicesList = (JsonArray) message.body();
     ZMQ.Socket socket = new ZMQConfig("tcp://127.0.0.1:5555").getSocket();
 
-    for(Object deviceObj : devicesList){
+    for(Object deviceObj : devicesList) {
 
       JsonObject device = (JsonObject) deviceObj;
       device.put("event_name","poller").put("plugin_engine", "linux");
-      String deviceId = String.valueOf(device.getInteger("id"));
+      String deviceId = device.getString("id");
 
       try {
         System.out.println("Sending request: " + device.toString());
@@ -43,8 +40,20 @@ public class PollerVerticle extends AbstractVerticle {
           JsonObject jsonObject = (JsonObject) object;
           counterObject.put(jsonObject.getString("name"),jsonObject.getString("value"));
         }
+          QueryHandler.saveAndGetById("linux_counter_result",counterObject)
+         .onSuccess(counterId->{
+           System.out.println(counterId);
+           QueryHandler.save("poller_result",
+               new JsonObject().put("counter_id",counterId).put("monitored_device_id",deviceId).put("counter_type","linux"))
+             .onSuccess(res->{
+               System.out.println("pollingData dump to db for deviceId: "+deviceId);
+             })
+             .onFailure(err->{
+               System.out.println(err.getMessage());
+             });
+         });
 
-        pollerService.saveCounter(counterObject);
+
 //        writeJsonToFile("linux_"+deviceId+".json", jsonResponse);
         System.out.println("Received response for device: "+deviceId);
       } catch (Exception e) {
@@ -60,5 +69,4 @@ public class PollerVerticle extends AbstractVerticle {
       System.out.println("Response written to file: " + fileName);
     }
   }
-
 }

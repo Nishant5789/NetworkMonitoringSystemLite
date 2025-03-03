@@ -13,7 +13,7 @@ public class DatabaseClient {
       PgConnectOptions connectOptions = new PgConnectOptions()
         .setPort(5432)
         .setHost("localhost")
-        .setDatabase("NMS_LITE")
+        .setDatabase("NMS_LITE_2.0")
         .setUser("postgres")
         .setPassword("1234");
 

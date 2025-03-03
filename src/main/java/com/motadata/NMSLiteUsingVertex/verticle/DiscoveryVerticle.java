@@ -1,7 +1,8 @@
 package com.motadata.NMSLiteUsingVertex.verticle;
 
 import com.motadata.NMSLiteUsingVertex.config.ZMQConfig;
-import com.motadata.NMSLiteUsingVertex.services.DiscoveryService;
+import com.motadata.NMSLiteUsingVertex.database.QueryHandler;
+import com.motadata.NMSLiteUsingVertex.utils.Utils;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Future;
 import io.vertx.core.eventbus.Message;
@@ -9,46 +10,66 @@ import io.vertx.core.json.JsonObject;
 import org.zeromq.ZMQ;
 
 public class DiscoveryVerticle extends AbstractVerticle {
-  DiscoveryService discoveryService;
 
   @Override
   public void start() {
     System.out.println("DiscoveryVerticle deploy on : " + Thread.currentThread().getName());
-    discoveryService = new DiscoveryService(vertx);
-    vertx.eventBus().consumer("discovery.verticle", this::discovery);
+    vertx.eventBus().localConsumer("discovery.verticle", this::discovery);
   }
 
   private void discovery(Message<Object> message)  {
-    JsonObject payload = (JsonObject) message.body();
-    Integer id = payload.getInteger("credential_id");
 
-    discoveryService.findById(id)
-      .onSuccess(credential->{
-        if(credential == null){
-          message.reply(new JsonObject().put("status", "failed").put("statusMsg","Credential not found"));
-        }
-        else{
-          vertx.executeBlocking(promise -> {
-            payload.put("username",credential.getString("username"))
-              .put("password",credential.getString("password"))
-              .put("event_name","discovery")
-              .put("plugin_engine","linux");
-            checkDiscovery(payload)
-              .onSuccess(promise::complete)
-              .onFailure(promise::fail);
-          }, result -> {
-            if (result.succeeded()) {
-              discoveryService.save(payload)
-                  .onSuccess(responce->message.reply(result.result()))
-                  .onFailure(err->message.reply("failed to added object "+err.getMessage()));
-            } else {
-              message.reply(result.result());
+    JsonObject payload = (JsonObject) message.body();
+    String credentialId = payload.getString("credential_id");
+    String ip = payload.getString("ip");
+    String port = payload.getString("port");
+
+    Utils.checkDeviceAvailability(ip,port)
+      .onSuccess(flag -> {
+        QueryHandler.findById("credential",credentialId)
+          .onSuccess(credential -> {
+            if(credential == null){
+              message.reply(new JsonObject().put("status", "failed").put("statusMsg","Credential not found"));
             }
+            else{
+              vertx.executeBlocking(promise -> {
+
+                JsonObject discoveryPayload =  new JsonObject(String.valueOf(payload));
+                discoveryPayload.put("username",credential.getString("username"))
+                  .put("password",credential.getString("password"))
+                  .put("event_name","discovery")
+                  .put("plugin_engine","linux");
+
+                checkDiscovery(discoveryPayload)
+                  .onSuccess(promise::complete)
+                  .onFailure(promise::fail);
+
+              }, result -> {
+
+                if (result.succeeded()) {
+                  QueryHandler.save("monitored_device",payload)
+                    .onSuccess(responce->{
+                      message.reply(new JsonObject(String.valueOf(result.result())));
+                    })
+                    .onFailure(err->
+                    {
+                      message.reply(new JsonObject().put("status", "failed").put("statusMsg", "failed to added object" + err.getMessage()));
+                    });
+                }
+                else {
+                  System.out.println(result.cause());
+                  message.reply(new JsonObject().put("status", "failed").put("statusMsg",result.cause()));
+                }
+              });
+            }
+          })
+          .onFailure(err->{
+            message.reply(new JsonObject().put("status", "error").put("statusMsg",err.getMessage()));
           });
-        }
       })
       .onFailure(err->{
-        message.reply(new JsonObject().put("status", "error").put("statusMsg",err.getMessage()));
+        System.out.println("discovery failed for device ip: "+ip+" port: ");
+        message.reply("discovery failed for device ip: "+ip+" port: "+port);
       });
   }
 
@@ -63,6 +84,12 @@ public class DiscoveryVerticle extends AbstractVerticle {
       byte[] reply = socket.recv(0);
       String jsonResponse = new String(reply, ZMQ.CHARSET);
       System.out.println("Received response:\n" + jsonResponse);
+
+      JsonObject responceObject = new JsonObject(jsonResponse);
+
+      if(responceObject.getString("status").equals("failed")){
+        return  Future.failedFuture(jsonResponse);
+      }
 
       return Future.succeededFuture(jsonResponse);
     } catch (Exception e) {

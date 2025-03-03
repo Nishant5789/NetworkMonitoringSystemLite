@@ -1,6 +1,6 @@
 package com.motadata.NMSLiteUsingVertex.routes;
 
-import com.motadata.NMSLiteUsingVertex.services.CredentialService;
+import com.motadata.NMSLiteUsingVertex.database.QueryHandler;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
@@ -9,11 +9,9 @@ import io.vertx.ext.web.RoutingContext;
 public class CredentialsRouter {
 
   Router router;
-  CredentialService credentialService;
 
   public CredentialsRouter(Vertx vertx){
     router = Router.router(vertx);
-    credentialService = new CredentialService(vertx);
   }
 
   public Router getRouter() {
@@ -38,7 +36,7 @@ public class CredentialsRouter {
     String username = payload.getString("username");
     String password = payload.getString("password");
 
-    credentialService.save(payload)
+    QueryHandler.save("credential",payload)
       .onSuccess(v -> ctx.response()
         .setStatusCode(201)
         .end("Credential saved successfully"))
@@ -47,8 +45,9 @@ public class CredentialsRouter {
         .end("Failed to save credential: " + err.getMessage()));
   }
 
-  private  void  getAllCredentials(RoutingContext ctx){
-    credentialService.getAll()
+  private void getAllCredentials(RoutingContext ctx){
+
+    QueryHandler.getAll("credential")
       .onSuccess(credentials ->
         ctx.response()
         .putHeader("content-type", "application/json")
@@ -56,12 +55,13 @@ public class CredentialsRouter {
       .onFailure(err -> ctx.response()
         .setStatusCode(500)
         .end("Failed to fetch credentials: " + err.getMessage()));
+
   }
 
   private void  findCredentialByName(RoutingContext ctx){
     String name = ctx.pathParam("name");
 
-    credentialService.findByName(name)
+      QueryHandler.getByfield("credential","name = $1", name)
       .onSuccess(credential -> {
         if (credential == null) {
           ctx.response()
@@ -88,7 +88,7 @@ public class CredentialsRouter {
       return;
     }
 
-    credentialService.update(name, payload)
+      QueryHandler.updateByField("credential", payload, "name = $1", name)
       .onSuccess(v -> ctx.response()
         .setStatusCode(200)
         .end("Credential updated successfully"))

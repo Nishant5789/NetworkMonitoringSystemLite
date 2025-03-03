@@ -22,7 +22,7 @@ public class Main {
     vertx.deployVerticle(Server.class.getName(),new DeploymentOptions().setInstances(1));
     vertx.deployVerticle(DiscoveryVerticle.class.getName(),new DeploymentOptions().setInstances(1));
     vertx.deployVerticle(ObjectVerticle.class.getName(), new DeploymentOptions().setInstances(1));
-    vertx.deployVerticle(PollerVerticle.class.getName(), new DeploymentOptions().setInstances(1).setThreadingModel(ThreadingModel.WORKER));
+    vertx.deployVerticle(PollerVerticle.class.getName(), new DeploymentOptions().setInstances(2).setThreadingModel(ThreadingModel.WORKER));
 
   }
 }
