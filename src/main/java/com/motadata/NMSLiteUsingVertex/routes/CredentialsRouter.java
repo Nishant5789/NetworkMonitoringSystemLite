@@ -88,7 +88,7 @@ public class CredentialsRouter {
       return;
     }
 
-      QueryHandler.updateByField("credential", payload, "name = $1", name)
+      QueryHandler.updateByField("credential", payload, "name = $4", name)
       .onSuccess(v -> ctx.response()
         .setStatusCode(200)
         .end("Credential updated successfully"))

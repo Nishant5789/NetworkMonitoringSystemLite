@@ -24,53 +24,59 @@ public class DiscoveryVerticle extends AbstractVerticle {
     String ip = payload.getString("ip");
     String port = payload.getString("port");
 
-    Utils.checkDeviceAvailability(ip,port)
-      .onSuccess(flag -> {
-        QueryHandler.findById("credential",credentialId)
-          .onSuccess(credential -> {
-            if(credential == null){
-              message.reply(new JsonObject().put("status", "failed").put("statusMsg","Credential not found"));
-            }
-            else{
-              vertx.executeBlocking(promise -> {
+//    String deviceId =
+      QueryHandler.saveAndGetById("monitored_device",payload)
+        .onSuccess(deviceId->{
+          Utils.checkDeviceAvailability(ip,port)
+            .onSuccess(flag -> {
+              QueryHandler.findById("credential",credentialId)
+                .onSuccess(credential -> {
+                  if(credential == null){
+                    message.reply(new JsonObject().put("status", "failed").put("statusMsg","Credential not found"));
+                  }
+                  else{
+                    vertx.executeBlocking(promise -> {
 
-                JsonObject discoveryPayload =  new JsonObject(String.valueOf(payload));
-                discoveryPayload.put("username",credential.getString("username"))
-                  .put("password",credential.getString("password"))
-                  .put("event_name","discovery")
-                  .put("plugin_engine","linux");
+                      JsonObject discoveryPayload =  new JsonObject(String.valueOf(payload));
+                      discoveryPayload.put("username",credential.getString("username"))
+                        .put("password",credential.getString("password"))
+                        .put("event_name","discovery")
+                        .put("plugin_engine","linux");
 
-                checkDiscovery(discoveryPayload)
-                  .onSuccess(promise::complete)
-                  .onFailure(promise::fail);
+                      checkDiscovery(discoveryPayload)
+                        .onSuccess(promise::complete)
+                        .onFailure(promise::fail);
 
-              }, result -> {
-
-                if (result.succeeded()) {
-                  QueryHandler.save("monitored_device",payload)
-                    .onSuccess(responce->{
-                      message.reply(new JsonObject(String.valueOf(result.result())));
-                    })
-                    .onFailure(err->
-                    {
-                      message.reply(new JsonObject().put("status", "failed").put("statusMsg", "failed to added object" + err.getMessage()));
+                    }, result -> {
+                      if (result.succeeded()) {
+                        QueryHandler.updateByField("monitored_device",payload.put("is_discovered","true"),"id = $6",deviceId)
+                          .onSuccess(responce->{
+                            message.reply(new JsonObject(String.valueOf(result.result())));
+                          })
+                          .onFailure(err->
+                          {
+                            message.reply(new JsonObject().put("status", "failed").put("statusMsg", "failed to added object" + err.getMessage()));
+                          });
+                      }
+                      else {
+                        System.out.println(result.cause());
+                        message.reply(new JsonObject().put("status", "failed").put("statusMsg",result.cause()));
+                      }
                     });
-                }
-                else {
-                  System.out.println(result.cause());
-                  message.reply(new JsonObject().put("status", "failed").put("statusMsg",result.cause()));
-                }
-              });
-            }
-          })
-          .onFailure(err->{
-            message.reply(new JsonObject().put("status", "error").put("statusMsg",err.getMessage()));
-          });
-      })
-      .onFailure(err->{
-        System.out.println("discovery failed for device ip: "+ip+" port: ");
-        message.reply("discovery failed for device ip: "+ip+" port: "+port);
-      });
+                  }
+                })
+                .onFailure(err->{
+                  message.reply(new JsonObject().put("status", "error").put("statusMsg",err.getMessage()));
+                });
+            })
+            .onFailure(err->{
+              System.out.println("discovery failed for device ip: "+ip+" port: "+port);
+              message.reply(new JsonObject().put("status", "error").put("statusMsg",err.getMessage()));
+            });
+          System.out.println("device is saved and starting discovery run");
+        });
+
+
   }
 
   private Future<String> checkDiscovery(JsonObject requestJson) {

@@ -21,7 +21,7 @@ public class QueryHandler {
   // Instance-level pool
   private static final Pool pool = com.motadata.NMSLiteUsingVertex.database.DatabaseClient.getPool(Main.vertx());
 
-  // Generalized INSERT
+  // Generalized save
   public static Future<Void> save(String tableName, JsonObject payload) {
     StringBuilder columns = new StringBuilder();
     StringBuilder placeholders = new StringBuilder();
@@ -46,7 +46,7 @@ public class QueryHandler {
       .mapEmpty();
   }
 
-  // Insert and return the ID of the newly inserted row
+  // save and return the ID of the newly inserted row
   public static Future<String> saveAndGetById(String tableName, JsonObject payload) {
     StringBuilder columns = new StringBuilder();
     StringBuilder placeholders = new StringBuilder();
@@ -144,9 +144,9 @@ public class QueryHandler {
       }
     }
 
-//    for (Object value : conditionValues) {
-//      tuple.addValue(value);
-//    }
+    for (Object value : conditionValues) {
+      tuple.addValue(value);
+    }
 
     String query = String.format("UPDATE %s SET %s WHERE %s", tableName, setClause, condition);
     return pool.preparedQuery(query)
@@ -166,7 +166,7 @@ public class QueryHandler {
       .mapToObj(i -> "$" + (i + 1))
       .collect(Collectors.joining(","));
 
-    String sql = "SELECT o.id, o.ip, o.port, c.username, c.password " + "FROM "+ tableName +" o " +
+    String sql = "SELECT o.id, o.ip, o.is_discovered , o.port, c.username, c.password " + "FROM "+ tableName +" o " +
       "INNER JOIN credential c ON o.credential_id = c.id " +
       "WHERE o.id IN (" + placeholders + ")";
 
@@ -182,6 +182,7 @@ public class QueryHandler {
           JsonObject json = new JsonObject()
             .put("id", row.getString("id"))
             .put("ip", row.getString("ip"))
+            .put("is_discovered", row.getString("is_discovered"))
             .put("port", row.getString("port").trim())
             .put("username", row.getString("username"))
             .put("password", row.getString("password"));

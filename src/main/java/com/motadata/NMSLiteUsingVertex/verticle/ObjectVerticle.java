@@ -23,7 +23,8 @@ public class ObjectVerticle extends AbstractVerticle {
   }
 
   private void getPollerResult(Message<Object> message) {
-         }
+
+  }
 
   // handle provision
   private void provision(Message<Object> message) {
@@ -32,8 +33,14 @@ public class ObjectVerticle extends AbstractVerticle {
     String  pollInterval = payload.getString("pollInterval");
 
      QueryHandler.getAllByIds("monitored_device",object_ids).onSuccess(objects->{
-
       for(JsonObject object : objects){
+
+        String isDiscovered = object.getString("is_discovered");
+
+        if(isDiscovered.equals("false"))
+          continue;
+
+
         String ip = object.getString("ip");
         String port = object.getString("port");
         Utils.checkDeviceAvailability(ip,port)
