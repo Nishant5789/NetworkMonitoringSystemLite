@@ -22,69 +22,99 @@ public class QueryHandler {
   private static final Pool pool = com.motadata.NMSLiteUsingVertex.database.DatabaseClient.getPool(Main.vertx());
 
   // Generalized save
-  public static Future<Void> save(String tableName, JsonObject payload) {
+  public static Future<Void> save(String tableName, JsonObject payload)
+  {
     StringBuilder columns = new StringBuilder();
+
     StringBuilder placeholders = new StringBuilder();
+
     Tuple tuple = Tuple.tuple();
+
     int index = 1;
 
-    for (Map.Entry<String, Object> entry : payload.getMap().entrySet()) {
+    for (Map.Entry<String, Object> entry : payload.getMap().entrySet())
+    {
       String column = entry.getKey();
+
       columns.append(column);
+
       placeholders.append("$").append(index++);
+
       tuple.addValue(entry.getValue());
 
-      if (index <= payload.size()) {
+      if (index <= payload.size())
+      {
         columns.append(", ");
+
         placeholders.append(", ");
       }
     }
 
     String query = String.format("INSERT INTO %s (%s) VALUES (%s)", tableName, columns, placeholders);
+
     return pool.preparedQuery(query)
       .execute(tuple)
       .mapEmpty();
   }
 
   // save and return the ID of the newly inserted row
-  public static Future<String> saveAndGetById(String tableName, JsonObject payload) {
+  public static Future<String> saveAndGetById(String tableName, JsonObject payload)
+  {
     StringBuilder columns = new StringBuilder();
+
     StringBuilder placeholders = new StringBuilder();
+
     Tuple tuple = Tuple.tuple();
+
     int index = 1;
 
-    for (Map.Entry<String, Object> entry : payload.getMap().entrySet()) {
+    for (Map.Entry<String, Object> entry : payload.getMap().entrySet())
+    {
       String column = entry.getKey();
+
       columns.append(column);
+
       placeholders.append("$").append(index++);
+
       tuple.addValue(entry.getValue());
 
-      if (index <= payload.size()) {
+      if (index <= payload.size())
+      {
         columns.append(", ");
+
         placeholders.append(", ");
       }
     }
 
     String query = String.format("INSERT INTO %s (%s) VALUES (%s) RETURNING id", tableName, columns, placeholders);
+
     return pool.preparedQuery(query)
       .execute(tuple)
-      .map(rows -> {
-        if (rows.size() == 0) {
+      .map(rows ->
+      {
+        if (rows.size() == 0)
+        {
           throw new RuntimeException("Insert failed: no ID returned");
         }
         Row row = rows.iterator().next();
+
         return row.getString("id");
       });
   }
 
   // Generalized SELECT ALL
-  public static Future<List<JsonObject>> getAll(String tableName) {
+  public static Future<List<JsonObject>> getAll(String tableName)
+  {
     String query = String.format("SELECT * FROM %s", tableName);
+
     return pool.query(query)
       .execute()
-      .map(rows -> {
+      .map(rows ->
+      {
         List<JsonObject> results = new ArrayList<>();
-        for (Row row : rows) {
+
+        for (Row row : rows)
+        {
           JsonObject obj = new JsonObject();
           for (int i = 0; i < row.size(); i++) {
             String column = row.getColumnName(i);
@@ -98,25 +128,39 @@ public class QueryHandler {
   }
 
   // Generalized SELECT BY CONDITION
-  public static Future<JsonObject> getByfield(String tableName, String condition, String values) {
-    if (condition == null || condition.isEmpty()) {
+  public static Future<JsonObject> getByfield(String tableName, String condition, String values)
+  {
+    if (condition == null || condition.isEmpty())
+    {
       return Future.failedFuture("Condition required for select_by");
     }
+
     String query = String.format("SELECT * FROM %s WHERE %s", tableName, condition);
+
     Tuple tuple = Tuple.of(values);
+
     return pool.preparedQuery(query)
       .execute(tuple)
-      .map(rows -> {
-        if (rows.size() == 0) {
+      .map(rows ->
+      {
+        if (rows.size() == 0)
+        {
           return null;
         }
+
         Row row = rows.iterator().next();
+
         JsonObject obj = new JsonObject();
-        for (int i = 0; i < row.size(); i++) {
+
+        for (int i = 0; i < row.size(); i++)
+        {
           String column = row.getColumnName(i);
+
           Object value = row.getValue(i);
+
           obj.put(column, value);
         }
+
         return obj;
       });
   }
@@ -127,28 +171,40 @@ public class QueryHandler {
   }
 
   // Generalized UPDATE :find by  field & update
-  public static Future<Void> updateByField(String tableName, JsonObject payload, String condition, Object... conditionValues) {
-    if (condition == null || condition.isEmpty()) {
+  public static Future<Void> updateByField(String tableName, JsonObject payload, String condition, Object... conditionValues)
+  {
+    if (condition == null || condition.isEmpty())
+    {
       return Future.failedFuture("Condition required for update");
     }
+
     StringBuilder setClause = new StringBuilder();
+
     Tuple tuple = Tuple.tuple();
+
     int index = 1;
 
-    for (Map.Entry<String, Object> entry : payload.getMap().entrySet()) {
+    for (Map.Entry<String, Object> entry : payload.getMap().entrySet())
+    {
       String column = entry.getKey();
+
       setClause.append(column).append(" = $").append(index++);
+
       tuple.addValue(entry.getValue());
-      if (index <= payload.size()) {
+
+      if (index <= payload.size())
+      {
         setClause.append(", ");
       }
     }
 
-    for (Object value : conditionValues) {
+    for (Object value : conditionValues)
+    {
       tuple.addValue(value);
     }
 
     String query = String.format("UPDATE %s SET %s WHERE %s", tableName, setClause, condition);
+
     return pool.preparedQuery(query)
       .execute(tuple)
       .mapEmpty();
