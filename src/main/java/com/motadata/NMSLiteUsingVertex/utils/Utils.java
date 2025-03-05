@@ -3,12 +3,25 @@ package com.motadata.NMSLiteUsingVertex.utils;
 import com.motadata.NMSLiteUsingVertex.Main;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
+import io.vertx.core.json.JsonObject;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 
+import static com.motadata.NMSLiteUsingVertex.utils.Constants.CREDENTIAL_TABLE;
+import static com.motadata.NMSLiteUsingVertex.utils.Constants.MONITOR_DEVICE_TABLE;
+
 public class Utils {
 
+
+  // sendResponce  creation
+  public static JsonObject createResponse(String status, String statusMsg) {
+    return new JsonObject()
+      .put("status", status)
+      .put("statusMsg", statusMsg);
+  }
+
+  // check ping is successful or not
   public static Future<Boolean> ping(String ip)
   {
       return Main.vertx().executeBlocking(()->
@@ -56,10 +69,12 @@ public class Utils {
       });
   }
 
+  // check port is reachable or not
   public static Future<Boolean> checkPort( String ip, String port)
   {
     Promise<Boolean> promise = Promise.promise();
-   try {
+   try
+   {
       Main.vertx().createNetClient().connect(Integer.parseInt(port), ip, res ->
       {
         if (res.succeeded())
@@ -83,6 +98,7 @@ public class Utils {
     return promise.future();
   }
 
+  // check device reachability
   public static Future<Boolean> checkDeviceAvailability(String ip, String port)
   {
     try
@@ -104,4 +120,30 @@ public class Utils {
       return Future.failedFuture("Failed to check device availability. " + exception.getMessage());
     }
   }
+
+
+  // validate payload
+  public static boolean isValidPayload(String tableName, JsonObject payload)
+  {
+    if (payload == null) return false;
+
+    switch (tableName.toLowerCase())
+    {
+      case CREDENTIAL_TABLE:
+        return payload.containsKey("name") && !payload.getString("name", "").trim().isEmpty() &&
+          payload.containsKey("username") && !payload.getString("username", "").trim().isEmpty() &&
+          payload.containsKey("password") && !payload.getString("password", "").trim().isEmpty();
+
+      case MONITOR_DEVICE_TABLE:
+        return payload.containsKey("ip") && !payload.getString("ip", "").trim().isEmpty() &&
+          payload.containsKey("credential_id") && !payload.getString("credential_id", "").trim().isEmpty() &&
+          payload.containsKey("port") && !payload.getString("port", "").trim().isEmpty() &&
+          payload.containsKey("type") && !payload.getString("type", "").trim().isEmpty() &&
+          payload.containsKey("is_discovered");
+
+      default:
+        return false;
+    }
+  }
+
 }

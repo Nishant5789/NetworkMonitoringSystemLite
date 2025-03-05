@@ -16,8 +16,10 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-public class QueryHandler {
+import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
 
+public class QueryHandler
+{
   // Instance-level pool
   private static final Pool pool = com.motadata.NMSLiteUsingVertex.database.DatabaseClient.getPool(Main.vertx());
 
@@ -166,7 +168,8 @@ public class QueryHandler {
   }
 
   // Find by ID
-  public static Future<JsonObject> findById(String tableName, String id) {
+  public static Future<JsonObject> findById(String tableName, String id)
+  {
     return getByfield(tableName, "id = $1", id);
   }
 
@@ -211,7 +214,8 @@ public class QueryHandler {
   }
 
   // Genralized get all object based on mutiple id
-  public static Future<List<JsonObject>> getAllByIds(String tableName, JsonArray object_ids) {
+  public static Future<List<JsonObject>> getAllByIds(String tableName, JsonArray object_ids)
+  {
     Promise<List<JsonObject>> promise = Promise.promise();
 
     List<String> ids = IntStream.range(0, object_ids.size())
@@ -254,4 +258,81 @@ public class QueryHandler {
     return promise.future();
   }
 
+  // Fetch the device details (including type) using findById
+  public static Future<List<JsonObject>> getDeviceCounterMetrics(String monitoredDeviceId)
+  {
+    return findById("monitored_device", monitoredDeviceId)
+      .compose(device ->
+      {
+        if (device == null)
+        {
+          return Future.failedFuture("Device not found: " + monitoredDeviceId);
+        }
+
+        String counterType = device.getString("type");
+
+        if (counterType == null)
+        {
+          return Future.failedFuture("Counter type not found for device: " + monitoredDeviceId);
+        }
+
+        String tableName = switch (counterType.toLowerCase())
+        {
+          case "linux" -> "linux_counter_result";
+          case "windows" -> "windows_counter_result";
+          default -> null;
+        };
+
+        if (tableName == null)
+        {
+          return Future.failedFuture("Unsupported counter type: " + counterType);
+        }
+
+        String query = String.format (
+          "SELECT cr.* " +
+            "FROM %s cr " +
+            "JOIN poller_result pr ON pr.counter_id = cr.id " +
+            "WHERE pr.monitored_device_id = $1 " +
+            "AND pr.counter_type = $2", tableName
+        );
+
+        Tuple params = Tuple.of(monitoredDeviceId, counterType);
+
+        return pool.preparedQuery(query)
+          .execute(params)
+          .map(rows ->
+          {
+            List<JsonObject> results = new ArrayList<>();
+            for (Row row : rows)
+            {
+              JsonObject obj = new JsonObject();
+              for (int i = 0; i < row.size(); i++)
+              {
+                String column = row.getColumnName(i);
+                Object value = row.getValue(i);
+                obj.put(column, value);
+              }
+              results.add(obj);
+            }
+            return results;
+          });
+      });
+  }
+
+  // handle delete by using tableId & tableName
+  public static Future<Boolean> deleteByIdAndTableName(String id, String tableName)
+  {
+    if (!List.of("monitored_device", "poller_result", "credential", "linux_counter_result", "windows_counter_result",  "snmp_interface_counter_result", "snmp_device_counter_result").contains(tableName))
+    {
+      return Future.failedFuture("Invalid table name: " + tableName);
+    }
+
+    String query = "DELETE FROM " + tableName + " WHERE id = $1";
+
+    Tuple params = Tuple.of(id);
+
+    return pool.preparedQuery(query)
+      .execute(params)
+      .map(rows -> rows.rowCount() > 0);
+  }
 }

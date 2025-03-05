@@ -19,11 +19,11 @@ public class Main
 
   private static final int SERVER_VERTICLE_INSTANCES = 1;
 
-  private static final int POLLER_VERTICLE_INSTANCES = 2;
+  private static final int POLLER_VERTICLE_INSTANCES = 4;
 
-  private static final int DEVICE_VERTICLE_INSTANCES = 1;
+  private static final int DEVICE_VERTICLE_INSTANCES = 2;
 
-  private static final int VERTX_WORKER_POOL_SIZE = 10;
+  private static final int VERTX_WORKER_POOL_SIZE = 20;
 
   private static final int EVENT_BUS_CONNECTION_TIMEOUT = 5000;
 
@@ -38,8 +38,7 @@ public class Main
   private static final Vertx vertx = Vertx.vertx( new VertxOptions()
     .setWorkerPoolSize(VERTX_WORKER_POOL_SIZE)
     .setEventLoopPoolSize(Runtime.getRuntime().availableProcessors())
-    .setEventBusOptions(
-      new EventBusOptions()
+    .setEventBusOptions( new EventBusOptions()
         .setConnectTimeout(EVENT_BUS_CONNECTION_TIMEOUT)
         .setIdleTimeout(EVENT_BUS_IDLE_TIMEOUT)
         .setReconnectAttempts(EVENT_BUS_RECONNECT_ATTEMPTS)
@@ -68,6 +67,24 @@ public class Main
           vertx.close(); // Optionally close Vert.x on failure
         }
       });
+
+    // Add a shutdown hook for graceful termination
+    Runtime.getRuntime().addShutdownHook(new Thread(() ->
+    {
+      LOGGER.info("Shutdown signal received. Cleaning up resources...");
+      vertx.close(ar ->
+      {
+        if (ar.succeeded())
+        {
+          LOGGER.info("Vert.x closed successfully.");
+        }
+        else
+        {
+          LOGGER.error("Failed to close Vert.x: {}", ar.cause().getMessage());
+        }
+      });
+    }));
+
   }
 
   private static Future<Void> deployVerticles()
@@ -78,7 +95,7 @@ public class Main
 
       .compose(v -> deployVerticle(DeviceVerticle.class.getName(), new DeploymentOptions().setInstances(DEVICE_VERTICLE_INSTANCES)))
 
-      .compose(v -> deployVerticle(PollerVerticle.class.getName(), new DeploymentOptions().setInstances(POLLER_VERTICLE_INSTANCES).setThreadingModel(ThreadingModel.WORKER)
+      .compose(v -> deployVerticle(PollerVerticle.class.getName(), new DeploymentOptions().setInstances(POLLER_VERTICLE_INSTANCES).setThreadingModel(ThreadingModel.WORKER).setWorkerPoolSize(30)
       ));
   }
 

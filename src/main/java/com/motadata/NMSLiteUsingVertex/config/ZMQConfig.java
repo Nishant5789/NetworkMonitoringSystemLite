@@ -17,6 +17,8 @@ public class ZMQConfig
     socket.connect(address);
   }
 
+
+  // return socket instance
   public ZMQ.Socket getSocket()
   {
     return socket;

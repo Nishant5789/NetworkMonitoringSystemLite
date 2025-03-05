@@ -22,11 +22,11 @@ public class Server extends AbstractVerticle
 
     mainRouter.route().handler(BodyHandler.create());
 
-    mainRouter.route("/api/credentials/*").subRouter(new CredentialsRouter(vertx).getRouter());
+    mainRouter.route("/api/credentials/*").subRouter(CredentialsRouter.getRouter());
 
-    mainRouter.route("/api/discovery/*").subRouter(new DiscoveryRouter(vertx).getRouter());
+    mainRouter.route("/api/discovery/*").subRouter(DiscoveryRouter.getRouter());
 
-    mainRouter.route("/api/devices/*").subRouter(new DeviceRouter(vertx).getRouter());
+    mainRouter.route("/api/devices/*").subRouter(DeviceRouter.getRouter());
 
     mainRouter.route("/").handler(ctx ->
     {

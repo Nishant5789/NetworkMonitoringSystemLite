@@ -16,6 +16,8 @@ public class Constants
 
   public static final String GET_POLLING_DATA_EVENT = "get_polling_data";
 
+  public static final String DELETE_DEVICE_EVENT = "delete_device";
+
   public static final String POLLING_EVENT = "polling";
 
   public static final String NAME_HEADER_PATH = "name";
@@ -24,7 +26,9 @@ public class Constants
 
   public static final String PASSWORD_KEY = "password";
 
-  public static final String DEVICE_ID_KEYS = "device_ids";
+  public static final String DEVICE_IDS_KEYS = "device_ids";
+
+  public static final String MONITORED_DEVICE_ID_KEY = "monitored_device_id";
 
   public static final String ID_KEY = "id";
 
@@ -49,7 +53,6 @@ public class Constants
   public static final String COUNTER_ID_KEY = "counter_id";
 
   public static final String COUNTER_TYPE_KEY = "counter_type";
-
 
   public static final String MONITOR_DEVICE_ID_KEY = "monitored_device_id";
 

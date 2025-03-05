@@ -13,8 +13,8 @@ import org.slf4j.LoggerFactory;
 
 import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
 
-public class DiscoveryVerticle extends AbstractVerticle {
-
+public class DiscoveryVerticle extends AbstractVerticle
+{
   private static final Logger logger = LoggerFactory.getLogger(DiscoveryVerticle.class);
 
   @Override
@@ -22,7 +22,7 @@ public class DiscoveryVerticle extends AbstractVerticle {
   {
     logger.info("Discovery Verticle deployed: {}", Thread.currentThread().getName());
 
-    vertx.eventBus().localConsumer(DISCOVERY_EVENT, this::discovery);
+    vertx.eventBus().consumer(DISCOVERY_EVENT, this::discovery);
   }
 
   private void discovery(Message<Object> message)
@@ -46,7 +46,7 @@ public class DiscoveryVerticle extends AbstractVerticle {
               {
                 if(credential == null)
                 {
-                  message.reply(new JsonObject().put("status", "failed").put("statusMsg","Credential not found"));
+                  message.reply(Utils.createResponse("failed", "Credential not found"));
                 }
                 else
                 {
@@ -73,28 +73,28 @@ public class DiscoveryVerticle extends AbstractVerticle {
                         })
                         .onFailure(err->
                         {
-                          message.reply(new JsonObject().put("status", "failed").put("statusMsg", "failed to added object" + err.getMessage()));
+                          message.reply(Utils.createResponse("failed", "Failed to update object: " + err.getMessage()));
                         });
                     }
                     else
                     {
                       logger.error("Error during discovery: ", result.cause());
 
-                      message.reply(new JsonObject().put("status", "failed").put("statusMsg",result.cause()));
+                      message.reply(Utils.createResponse("failed", result.cause().getMessage()));
                     }
                   });
                 }
               })
               .onFailure(err->
               {
-                message.reply(new JsonObject().put("status", "error").put("statusMsg",err.getMessage()));
+                message.reply(Utils.createResponse("error", err.getMessage()));
               });
           })
           .onFailure(err->
           {
             logger.warn("Discovery failed for device IP: {} Port: {}", ip, port);
 
-            message.reply(new JsonObject().put("status", "error").put("statusMsg",err.getMessage()));
+            message.reply(Utils.createResponse("error", err.getMessage()));
           });
 
         logger.info("Device is saved and starting discovery run");
@@ -121,14 +121,14 @@ public class DiscoveryVerticle extends AbstractVerticle {
 
       if(responceObject.getString("status").equals("failed"))
       {
-        return Future.failedFuture(jsonResponse);
+        return Future.failedFuture(Utils.createResponse("failed", jsonResponse).encode());
       }
 
       return Future.succeededFuture(jsonResponse);
     }
     catch (Exception e)
     {
-      return Future.failedFuture("ZMQ communication failed: " + e.getMessage());
+      return Future.failedFuture(Utils.createResponse("error", "ZMQ communication failed: " + e.getMessage()).encode());
     }
   }
 }

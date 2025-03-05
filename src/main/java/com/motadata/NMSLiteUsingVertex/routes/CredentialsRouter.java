@@ -1,7 +1,10 @@
 package com.motadata.NMSLiteUsingVertex.routes;
 
+import com.motadata.NMSLiteUsingVertex.Main;
 import com.motadata.NMSLiteUsingVertex.database.QueryHandler;
+import com.motadata.NMSLiteUsingVertex.utils.Utils;
 import io.vertx.core.Vertx;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
@@ -10,122 +13,172 @@ import org.slf4j.LoggerFactory;
 
 import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
 
-public class CredentialsRouter {
-
+public class CredentialsRouter
+{
   private static final Logger LOGGER = LoggerFactory.getLogger(CredentialsRouter.class);
 
-  private final Router router;
+  private  static final Router router = Router.router(Main.vertx());
 
-  public CredentialsRouter(Vertx vertx){
-    router = Router.router(vertx);
-  }
-
-  public Router getRouter() {
-
+  public static Router getRouter()
+  {
     // POST /api/credentials - Save new credential
-    router.post("/").handler(this::saveCredential);
+    router.post("/").handler(CredentialsRouter::saveCredential);
 
     // GET /api/credentials - Get all credentials
-    router.get("/").handler(this::getAllCredentials);
+    router.get("/").handler(CredentialsRouter::getAllCredentials);
 
     // GET /api/credentials/:name - Find credential by name
-    router.get("/:name").handler(this::findCredentialByName);
+    router.get("/:name").handler(CredentialsRouter::findCredentialByName);
 
     // PUT /api/credentials/:name - Update credential by name
-    router.put("/:name").handler(this::updateCredential);
+    router.put("/:name").handler(CredentialsRouter::updateCredential);
 
     return router;
   }
 
-  private void saveCredential(RoutingContext ctx) {
+  private static void saveCredential(RoutingContext ctx)
+  {
     JsonObject payload = ctx.body().asJsonObject();
+
+    if (!Utils.isValidPayload(CREDENTIAL_TABLE, payload))
+    {
+      JsonObject response = Utils.createResponse("error", "Invalid credential payload: Missing required fields.");
+
+      ctx.response().setStatusCode(400).end(response.encodePrettily());
+    }
+
     LOGGER.info("Saving credential: {}", payload);
 
     QueryHandler.save(CREDENTIAL_TABLE, payload)
-      .onSuccess(v -> {
+      .onSuccess(v ->
+      {
         LOGGER.info("Credential saved successfully");
-        ctx.response()
-          .setStatusCode(201)
-          .end("Credential saved successfully");
+
+        JsonObject response = Utils.createResponse("success", "Credential saved successfully.");
+
+        ctx.response().setStatusCode(201).end(response.encodePrettily());
       })
-      .onFailure(err -> {
+      .onFailure(err ->
+      {
         LOGGER.error("Failed to save credential: {}", err.getMessage());
-        ctx.response()
-          .setStatusCode(500)
-          .end("Failed to save credential: " + err.getMessage());
+
+        JsonObject response = Utils.createResponse("error", "Failed to save credential: " + err.getMessage());
+
+        ctx.response().setStatusCode(500).end(response.encodePrettily());
       });
   }
 
-  private void getAllCredentials(RoutingContext ctx){
+  private static void getAllCredentials(RoutingContext ctx)
+  {
     LOGGER.info("Fetching all credentials");
 
     QueryHandler.getAll(CREDENTIAL_TABLE)
-      .onSuccess(credentials -> {
-        LOGGER.info("Fetched credentials: {}", credentials);
-        ctx.response()
-          .putHeader("content-type", "application/json")
-          .end(new JsonObject().put("credentials", credentials).encode());
+      .onSuccess(credentials ->
+      {
+        LOGGER.info("Fetched credentials successfully");
+
+        JsonArray response = new JsonArray(credentials);
+
+        ctx.response().end(response.encodePrettily());
       })
-      .onFailure(err -> {
+      .onFailure(err ->
+      {
         LOGGER.error("Failed to fetch credentials: {}", err.getMessage());
-        ctx.response()
-          .setStatusCode(500)
-          .end("Failed to fetch credentials: " + err.getMessage());
+
+        JsonObject response = Utils.createResponse("error", "Failed to fetch credentials: " + err.getMessage());
+
+        ctx.response().setStatusCode(500).end(response.encodePrettily());
       });
   }
 
-  private void findCredentialByName(RoutingContext ctx){
+  private static void findCredentialByName(RoutingContext ctx)
+  {
     String name = ctx.pathParam(NAME_HEADER_PATH);
+
+    if (name == null || name.trim().isEmpty())
+    {
+      LOGGER.warn("Invalid credential name received: {}", name);
+
+      JsonObject response = Utils.createResponse("failed", "Invalid credential name: Name cannot be empty");
+
+      ctx.response().setStatusCode(400).end(response.encodePrettily());
+    }
+
     LOGGER.info("Finding credential by name: {}", name);
 
     QueryHandler.getByfield(CREDENTIAL_TABLE, "name = $1", name)
-      .onSuccess(credential -> {
-        if (credential == null) {
+      .onSuccess(credential ->
+      {
+        if (credential == null)
+        {
           LOGGER.warn("Credential not found: {}", name);
-          ctx.response()
-            .setStatusCode(404)
-            .end("Credential not found");
-        } else {
+
+          JsonObject response = Utils.createResponse("failed", "Credential not found");
+
+          ctx.response().setStatusCode(404).end(response.encodePrettily());
+        }
+        else
+        {
           LOGGER.info("Found credential: {}", credential);
+
           ctx.response()
-            .putHeader("content-type", "application/json")
-            .end(credential.encode());
+            .end(credential.encodePrettily());
         }
       })
-      .onFailure(err -> {
+      .onFailure(err ->
+      {
         LOGGER.error("Failed to find credential: {}", err.getMessage());
+
+        JsonObject response = Utils.createResponse("failed", "Credential not found");
+
         ctx.response()
           .setStatusCode(500)
           .end("Failed to find credential: " + err.getMessage());
       });
   }
 
-  private void updateCredential(RoutingContext ctx) {
+  private static void updateCredential(RoutingContext ctx)
+  {
     String name = ctx.pathParam(NAME_HEADER_PATH);
+
+    if (name == null || name.trim().isEmpty())
+    {
+      LOGGER.warn("Invalid credential name received: {}", name);
+
+      JsonObject response = Utils.createResponse("failed", "Invalid credential name: Name cannot be empty");
+
+      ctx.response().setStatusCode(400).end(response.encodePrettily());
+    }
+
     JsonObject payload = ctx.body().asJsonObject();
 
     LOGGER.info("Updating credential for name: {}", name);
 
-    if (payload == null || !payload.containsKey(USERNAME_KEY) || !payload.containsKey(PASSWORD_KEY)) {
+    if (!Utils.isValidPayload(CREDENTIAL_TABLE,payload))
+    {
       LOGGER.warn("Invalid payload: {}", payload);
-      ctx.response()
-        .setStatusCode(400)
-        .end("Invalid payload: username and password are required");
-      return;
+
+      JsonObject response = Utils.createResponse("failed", "Invalid credential payload: Missing required fields");
+
+      ctx.response().setStatusCode(400).end(response.encodePrettily());
     }
 
     QueryHandler.updateByField(CREDENTIAL_TABLE, payload, "name = $4", name)
-      .onSuccess(v -> {
+      .onSuccess(v ->
+      {
         LOGGER.info("Credential updated successfully for name: {}", name);
-        ctx.response()
-          .setStatusCode(200)
-          .end("Credential updated successfully");
+
+        JsonObject response = Utils.createResponse("success", "Credential updated successfully");
+
+        ctx.response().setStatusCode(200).end(response.encodePrettily());
       })
-      .onFailure(err -> {
+      .onFailure(err ->
+      {
         LOGGER.error("Failed to update credential: {}", err.getMessage());
-        ctx.response()
-          .setStatusCode(500)
-          .end("Failed to update credential: " + err.getMessage());
+
+        JsonObject response = Utils.createResponse("error", "Failed to update credential: " + err.getMessage());
+
+        ctx.response().setStatusCode(500).end(response.encodePrettily());
       });
   }
 }

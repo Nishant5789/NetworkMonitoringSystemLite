@@ -9,6 +9,7 @@ public class DatabaseClient
 {
   private static Pool pool;
 
+// return pooloption configuration
   public static Pool getPool(Vertx vertx)
   {
     if (pool == null)

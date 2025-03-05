@@ -1,5 +1,7 @@
 package com.motadata.NMSLiteUsingVertex.routes;
 
+import com.motadata.NMSLiteUsingVertex.Main;
+import com.motadata.NMSLiteUsingVertex.utils.Utils;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
@@ -10,20 +12,13 @@ import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
 
 public class DeviceRouter
 {
+  private  static final Router router = Router.router(Main.vertx());
 
   private static final Logger LOGGER = LoggerFactory.getLogger(DeviceRouter.class);
 
-  private final Router router;
-
-  public DeviceRouter(Vertx vertx)
+  public static Router getRouter()
   {
-    this.router = Router.router(vertx);
-  }
-
-  public Router getRouter()
-  {
-
-    // POST /api/provision - Handle device provisioning
+    // POST /api/devices/provision - Handle device provisioning
     router.post("/provision").handler(ctx ->
     {
       JsonObject requestBody = ctx.body().asJsonObject();
@@ -48,31 +43,71 @@ public class DeviceRouter
           LOGGER.info("Provisioning successful: {}", response);
 
           ctx.response().setStatusCode(201).end(response.encodePrettily());
-        } else
+        }
+        else
         {
           LOGGER.error("Provisioning failed: {}", reply.cause().getMessage());
 
-          ctx.response().setStatusCode(500).end(new JsonObject().put("error", "Provisioning failed").encodePrettily());
+          JsonObject response = Utils.createResponse("error", "Provisioning failed: " + reply.cause().getMessage());
+
+          ctx.response().setStatusCode(500).end(response.encodePrettily());
         }
       });
     });
 
-    // GET /api/get - Fetch provision data
-//    router.get("/get").handler(ctx -> {
-//      LOGGER.info("Fetching provision data");
-//
-//      ctx.vertx().eventBus().request(GET_POLLING_DATA_EVENT, null, reply -> {
-//        if (reply.succeeded()) {
-//          String response = (String) reply.result().body();
-//          LOGGER.info("Provision data fetched successfully");
-//          ctx.response().setStatusCode(200).end(response);
-//        } else {
-//          LOGGER.error("Failed to fetch provision data: {}", reply.cause().getMessage());
-//          ctx.response().setStatusCode(500).end(new JsonObject().put("error", "Failed to fetch provision data").encodePrettily());
-//        }
-//      });
-//    });
+//     GET /api/devices/:monitored_device_id - fetch devicePolling data
+    router.get("/:monitored_device_id").handler(ctx ->
+    {
+      LOGGER.info("Fetching devicePolling data");
 
+      String monitoredDeviceID = ctx.pathParam(MONITORED_DEVICE_ID_KEY);
+
+      ctx.vertx().eventBus().request(GET_POLLING_DATA_EVENT, monitoredDeviceID, reply ->
+      {
+        if (reply.succeeded())
+        {
+          JsonObject response = (JsonObject) reply.result().body();
+
+          LOGGER.info("Device Polling data fetched successfully");
+
+          ctx.response().setStatusCode(200).end(response.encodePrettily());
+        }
+        else
+        {
+          LOGGER.error("Failed to fetch provision data: {}", reply.cause().getMessage());
+
+          JsonObject response = Utils.createResponse("error", "Failed to fetch device Polling data");
+
+          ctx.response().setStatusCode(500).end(response.encodePrettily());
+        }
+      });
+    });
+
+    // delete api/devices/:monitored_device_id
+    router.delete("/:monitored_device_id").handler(ctx->
+    {
+      String monitoredDeviceID = ctx.pathParam(MONITORED_DEVICE_ID_KEY);
+
+      ctx.vertx().eventBus().request(DELETE_DEVICE_EVENT, monitoredDeviceID, reply ->
+        {
+          if (reply.succeeded())
+          {
+            JsonObject response = (JsonObject) reply.result().body();
+
+            LOGGER.info("Device Deleted successfully");
+
+            ctx.response().setStatusCode(200).end(response.encodePrettily());
+          }
+          else
+          {
+            LOGGER.error("Failed to delete device ID: {}", reply.cause().getMessage());
+
+            JsonObject response = Utils.createResponse("error", "Failed to delete device");
+
+            ctx.response().setStatusCode(500).end(response.encodePrettily());
+          }
+        });
+    });
     return router;
   }
 }
