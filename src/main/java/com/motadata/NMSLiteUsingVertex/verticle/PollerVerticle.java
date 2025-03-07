@@ -87,6 +87,7 @@ public class PollerVerticle extends AbstractVerticle
     message.reply("Polling completed");
   }
 
+  // handle Polling data dump to file
   private static void writeJsonToFile(String fileName, String jsonData) throws IOException
   {
     try (FileWriter file = new FileWriter(fileName))

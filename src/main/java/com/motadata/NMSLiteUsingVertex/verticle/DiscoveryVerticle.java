@@ -25,6 +25,7 @@ public class DiscoveryVerticle extends AbstractVerticle
     vertx.eventBus().consumer(DISCOVERY_EVENT, this::discovery);
   }
 
+  // handle discovery event
   private void discovery(Message<Object> message)
   {
     JsonObject payload = (JsonObject) message.body();
@@ -101,6 +102,7 @@ public class DiscoveryVerticle extends AbstractVerticle
       });
   }
 
+  // handle checkdiscovery using plugin engine
   private Future<String> checkDiscovery(JsonObject requestJson)
   {
     try

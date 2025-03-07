@@ -46,7 +46,7 @@ public class Main
     )
   );
 
-
+  // return vertex instance
   public static Vertx vertx()
   {
     return vertx;
@@ -87,6 +87,7 @@ public class Main
 
   }
 
+  // Hanlde deploy verticles sequencally
   private static Future<Void> deployVerticles()
   {
     return deployVerticle(Server.class.getName(), new DeploymentOptions().setInstances(SERVER_VERTICLE_INSTANCES))
@@ -99,6 +100,7 @@ public class Main
       ));
   }
 
+  // deploy verticle by classname & deploymentoptions
   private static Future<Void> deployVerticle(String className, DeploymentOptions options)
   {
     return Future.future(promise ->

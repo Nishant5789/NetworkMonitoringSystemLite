@@ -19,6 +19,7 @@ public class CredentialsRouter
 
   private  static final Router router = Router.router(Main.vertx());
 
+  // return subrouter for crednetial Routing
   public static Router getRouter()
   {
     // POST /api/credentials - Save new credential
@@ -36,6 +37,8 @@ public class CredentialsRouter
     return router;
   }
 
+
+  // handle save credential
   private static void saveCredential(RoutingContext ctx)
   {
     JsonObject payload = ctx.body().asJsonObject();
@@ -68,6 +71,8 @@ public class CredentialsRouter
       });
   }
 
+
+  //  handle getalll credential
   private static void getAllCredentials(RoutingContext ctx)
   {
     LOGGER.info("Fetching all credentials");
@@ -91,6 +96,7 @@ public class CredentialsRouter
       });
   }
 
+  // handle find credential by name
   private static void findCredentialByName(RoutingContext ctx)
   {
     String name = ctx.pathParam(NAME_HEADER_PATH);
@@ -137,6 +143,7 @@ public class CredentialsRouter
       });
   }
 
+  // handle update credential
   private static void updateCredential(RoutingContext ctx)
   {
     String name = ctx.pathParam(NAME_HEADER_PATH);

@@ -12,6 +12,8 @@ public class DiscoveryRouter
 {
   private  static final Router router = Router.router(Main.vertx());
 
+
+  // return subrouter for dicoveryrouter
   public static Router getRouter()
   {
     // POST /api/discovery

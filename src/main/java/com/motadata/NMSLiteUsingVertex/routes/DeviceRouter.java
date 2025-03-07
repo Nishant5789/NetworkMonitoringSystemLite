@@ -16,6 +16,7 @@ public class DeviceRouter
 
   private static final Logger LOGGER = LoggerFactory.getLogger(DeviceRouter.class);
 
+  // return subrouter for deviceRouting
   public static Router getRouter()
   {
     // POST /api/devices/provision - Handle device provisioning

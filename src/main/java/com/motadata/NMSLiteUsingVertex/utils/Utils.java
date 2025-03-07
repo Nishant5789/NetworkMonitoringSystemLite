@@ -14,7 +14,7 @@ import static com.motadata.NMSLiteUsingVertex.utils.Constants.MONITOR_DEVICE_TAB
 public class Utils {
 
 
-  // sendResponce  creation
+  // senderResponce  creation
   public static JsonObject createResponse(String status, String statusMsg) {
     return new JsonObject()
       .put("status", status)
@@ -120,7 +120,6 @@ public class Utils {
       return Future.failedFuture("Failed to check device availability. " + exception.getMessage());
     }
   }
-
 
   // validate payload
   public static boolean isValidPayload(String tableName, JsonObject payload)
