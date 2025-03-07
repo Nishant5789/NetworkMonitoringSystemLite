@@ -226,7 +226,7 @@ public class QueryHandler
       .mapToObj(i -> "$" + (i + 1))
       .collect(Collectors.joining(","));
 
-    String sql = "SELECT o.id, o.ip, o.is_discovered , o.port, c.username, c.password " + "FROM "+ tableName +" o " +
+    String sql = "SELECT o.id, o.type, o.ip, o.is_discovered, o.port, c.username, c.password " + "FROM "+ tableName +" o " +
       "INNER JOIN credential c ON o.credential_id = c.id " +
       "WHERE o.id IN (" + placeholders + ")";
 
@@ -241,6 +241,7 @@ public class QueryHandler
         for (Row row : rows) {
           JsonObject json = new JsonObject()
             .put("id", row.getString("id"))
+            .put("type", row.getString("type"))
             .put("ip", row.getString("ip"))
             .put("is_discovered", row.getString("is_discovered"))
             .put("port", row.getString("port").trim())

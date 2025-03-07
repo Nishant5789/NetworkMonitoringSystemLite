@@ -107,7 +107,7 @@ public class DeviceVerticle extends AbstractVerticle
   // schedule device polling
   private void handleDeviceScheduling(int pollInterval)
   {
-    Main.vertx().setTimer(2000,timeId->
+    Main.vertx().setTimer(5000,timeId->
     {
       logger.info("Polling is started, deviceQueue: {}", deviceQueue);
 

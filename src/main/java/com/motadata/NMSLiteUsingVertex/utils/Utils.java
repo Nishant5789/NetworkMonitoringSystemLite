@@ -4,8 +4,11 @@ import com.motadata.NMSLiteUsingVertex.Main;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.json.JsonObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
 
 import static com.motadata.NMSLiteUsingVertex.utils.Constants.CREDENTIAL_TABLE;
@@ -13,121 +16,88 @@ import static com.motadata.NMSLiteUsingVertex.utils.Constants.MONITOR_DEVICE_TAB
 
 public class Utils {
 
+  private static final Logger log = LoggerFactory.getLogger(Utils.class);
 
-  // senderResponce  creation
   public static JsonObject createResponse(String status, String statusMsg) {
     return new JsonObject()
       .put("status", status)
       .put("statusMsg", statusMsg);
   }
 
-  // check ping is successful or not
   public static Future<Boolean> ping(String ip)
   {
-      return Main.vertx().executeBlocking(()->
+    return Main.vertx().executeBlocking(() ->
+    {
+      try
       {
-        try
+        String command = "ping -c 3 " + ip + " | awk '/packets transmitted/ {if ($6 == \"0%\") print \"true\"; else print \"false\"}'";
+
+        ProcessBuilder processBuilder = new ProcessBuilder("sh", "-c", command);
+
+        processBuilder.redirectErrorStream(true);
+
+        Process process = processBuilder.start();
+
+        BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+        
+        String output = reader.readLine();
+
+        int exitCode = process.waitFor();
+        if (exitCode != 0)
         {
-          String pingCommand = "ping -c 2 " + ip;
-
-          System.out.println("execute command: " + pingCommand);
-
-          ProcessBuilder processBuilder = new ProcessBuilder(pingCommand.split(" "));
-
-          Process process = processBuilder.start();
-
-          BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-
-          StringBuilder output = new StringBuilder();
-
-          String line;
-
-          while ((line = reader.readLine()) != null)
-          {
-            output.append(line).append("\n");
-          }
-
-          // Wait for the process to complete and get exit code
-          int exitCode = process.waitFor();
-
-          if(exitCode == 0)
-          {
-            System.out.println("ping command is sucessful for ip: " + ip);
-            return  true;
-          }
-          else
-          {
-            System.out.println("ping command is unsucessful for ip: " + ip);
-            return  false;
-          }
-        }
-        catch (Exception e)
-        {
-          System.err.println("Ping failed for " + ip + ": " + e.getMessage());
+          log.error("Ping command execution failed with exit code: {}", exitCode);
           return false;
         }
-      });
+
+        return output != null && output.trim().equals("true");
+      }
+      catch (IOException | InterruptedException e)
+      {
+        log.error("Exception occurred during ping execution: {}", e.getMessage(), e);
+        return false;
+      }
+    });
   }
 
-  // check port is reachable or not
-  public static Future<Boolean> checkPort( String ip, String port)
-  {
+  public static Future<Boolean> checkPort(String ip, String port) {
     Promise<Boolean> promise = Promise.promise();
-   try
-   {
-      Main.vertx().createNetClient().connect(Integer.parseInt(port), ip, res ->
-      {
-        if (res.succeeded())
-        {
-          System.out.println("sucessful tcp connection for ip: "+ ip +"port: " + port);
+    try {
+      Main.vertx().createNetClient().connect(Integer.parseInt(port), ip, res -> {
+        if (res.succeeded()) {
+          log.info("Successful TCP connection for IP: {} Port: {}", ip, port);
           promise.complete(true);
-        }
-        else
-        {
-          System.out.println("failed tcp connection for ip: "+ ip +"port: " + port +" "+res.cause().getMessage());
+        } else {
+          log.error("Failed TCP connection for IP: {} Port: {} - {}", ip, port, res.cause().getMessage());
           promise.complete(false);
         }
       });
-    }
-    catch (Exception exception)
-    {
-      System.out.println("Failed to connect to ip "+": " + port + "- " +exception.getMessage());
+    } catch (Exception exception) {
+      log.error("Failed to connect to IP {} Port: {} - {}", ip, port, exception.getMessage(), exception);
       promise.fail(exception);
     }
 
     return promise.future();
   }
 
-  // check device reachability
-  public static Future<Boolean> checkDeviceAvailability(String ip, String port)
-  {
-    try
-    {
-      return ping(ip).compose(isPingReachable ->
-      {
-        if (isPingReachable)
-        {
+  public static Future<Boolean> checkDeviceAvailability(String ip, String port) {
+    try {
+      return ping(ip).compose(isPingReachable -> {
+        if (isPingReachable) {
           return checkPort(ip, port);
-        }
-        else
-        {
+        } else {
           return Future.failedFuture("Device is not reachable");
         }
       });
-    }
-    catch (Exception exception)
-    {
+    } catch (Exception exception) {
+      log.error("Failed to check device availability: {}", exception.getMessage(), exception);
       return Future.failedFuture("Failed to check device availability. " + exception.getMessage());
     }
   }
 
-  // validate payload
-  public static boolean isValidPayload(String tableName, JsonObject payload)
-  {
+  public static boolean isValidPayload(String tableName, JsonObject payload) {
     if (payload == null) return false;
 
-    switch (tableName.toLowerCase())
-    {
+    switch (tableName.toLowerCase()) {
       case CREDENTIAL_TABLE:
         return payload.containsKey("name") && !payload.getString("name", "").trim().isEmpty() &&
           payload.containsKey("username") && !payload.getString("username", "").trim().isEmpty() &&
@@ -145,4 +115,27 @@ public class Utils {
     }
   }
 
+  public static String windowsPollDataKeyFormatter(String key) {
+    StringBuilder result = new StringBuilder();
+    result.append(Character.toLowerCase(key.charAt(0)));
+
+    for (int i = 1; i < key.length(); i++) {
+      char ch = key.charAt(i);
+      if (Character.isUpperCase(ch)) {
+        result.append('_').append(Character.toLowerCase(ch));
+      } else {
+        result.append(ch);
+      }
+    }
+    return result.toString();
+  }
+
+  public static JsonObject formatWindowsPlugineEnginePayload(String ip, String username, String password) {
+    return new JsonObject()
+      .put("ip", ip)
+      .put("username", username)
+      .put("password", password)
+      .put("requestType", "provisioning")
+      .put("systemType", "windows");
+  }
 }

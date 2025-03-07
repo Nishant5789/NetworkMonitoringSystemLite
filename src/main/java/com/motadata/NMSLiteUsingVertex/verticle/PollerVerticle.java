@@ -2,6 +2,7 @@ package com.motadata.NMSLiteUsingVertex.verticle;
 
 import com.motadata.NMSLiteUsingVertex.config.ZMQConfig;
 import com.motadata.NMSLiteUsingVertex.database.QueryHandler;
+import com.motadata.NMSLiteUsingVertex.utils.Utils;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Promise;
 import io.vertx.core.eventbus.Message;
@@ -41,50 +42,65 @@ public class PollerVerticle extends AbstractVerticle
     {
       JsonObject device = (JsonObject) deviceObj;
 
-      device.put(EVENT_NAME_KEY,POLLING_EVENT).put(PLUGIN_ENGINE_TYPE_KEY, LINUX_PLUGIN_ENGINE);
+      String deviceType = device.getString(DEVICE_TYPE_KEY);
 
-      String deviceId = device.getString(ID_KEY);
-
-      try
+      if(deviceType.contains("linux"))
       {
-        logger.info("Sending request: {}", device.toString());
-
-        socket.send(device.toString().getBytes(ZMQ.CHARSET), 0);
-
-        byte[] reply = socket.recv(0);
-
-        String jsonResponse = new String(reply, ZMQ.CHARSET);
-
-        JsonObject counterObject = new JsonObject();
-
-        for(Object object: new JsonObject(jsonResponse).getJsonArray("metrics"))
-        {
-          JsonObject jsonObject = (JsonObject) object;
-          counterObject.put(jsonObject.getString("name"),jsonObject.getString("value"));
-        }
-
-        QueryHandler.saveAndGetById(LINUX_COUNTER_RESULT_TABLE, counterObject)
-          .onSuccess(counterId->
-          {
-            QueryHandler.save(POLLLER_RESULT_TABLE, new JsonObject().put(COUNTER_ID_KEY,counterId).put(MONITOR_DEVICE_ID_KEY,deviceId).put(COUNTER_TYPE_KEY,LINUX_PLUGIN_ENGINE))
-              .onSuccess(res->
-              {
-                logger.info("Polling data dumped to DB for deviceId: {}", deviceId);
-              })
-              .onFailure(err->
-              {
-                logger.error("Failed to save polling data for device {}: {}", deviceId, err.getMessage());
-              });
-          });
-
-        logger.info("Received response for device: {}", deviceId);
+        handleLinuxPollingData(device, socket);
       }
-      catch (Exception e)
+      else
       {
-        logger.error("ZMQ communication failed for device {}: {}", deviceId, e.getMessage());
+        handleWindowsPollingData(device, socket);
       }
     }
     message.reply("Polling completed");
+  }
+
+  // handle linux device polling data
+  private static void handleLinuxPollingData(JsonObject device, ZMQ.Socket socket)
+  {
+    device.put(EVENT_NAME_KEY,POLLING_EVENT).put(PLUGIN_ENGINE_TYPE_KEY, LINUX_PLUGIN_ENGINE);
+
+    String deviceId = device.getString(ID_KEY);
+
+    try
+    {
+      logger.info("Sending request: {}", device.toString());
+
+      socket.send(device.toString().getBytes(ZMQ.CHARSET), 0);
+
+      byte[] reply = socket.recv(0);
+
+      String jsonResponse = new String(reply, ZMQ.CHARSET);
+
+      JsonObject counterObject = new JsonObject();
+
+      for(Object object: new JsonObject(jsonResponse).getJsonArray("metrics"))
+      {
+        JsonObject jsonObject = (JsonObject) object;
+        counterObject.put(jsonObject.getString("name"),jsonObject.getString("value"));
+      }
+
+      QueryHandler.saveAndGetById(LINUX_COUNTER_RESULT_TABLE, counterObject)
+        .onSuccess(counterId->
+        {
+          QueryHandler.save(POLLLER_RESULT_TABLE, new JsonObject().put(COUNTER_ID_KEY,counterId).put(MONITOR_DEVICE_ID_KEY,deviceId).put(COUNTER_TYPE_KEY,LINUX_PLUGIN_ENGINE))
+            .onSuccess(res->
+            {
+              logger.info("Polling data dumped to DB for deviceId: {}", deviceId);
+            })
+            .onFailure(err->
+            {
+              logger.error("Failed to save polling data for device {}: {}", deviceId, err.getMessage());
+            });
+        });
+
+      logger.info("Received response for device: {}", deviceId);
+    }
+    catch (Exception e)
+    {
+      logger.error("ZMQ communication failed for device {}: {}", deviceId, e.getMessage());
+    }
   }
 
   // handle Polling data dump to file
@@ -95,6 +111,53 @@ public class PollerVerticle extends AbstractVerticle
       file.write(jsonData);
 
       logger.info("Response written to file: {}", fileName);
+    }
+  }
+
+  // handle windows device polling data
+  private void handleWindowsPollingData(JsonObject device, ZMQ.Socket socket)
+  {
+    String deviceId = device.getString(ID_KEY);
+
+    JsonObject formatWindowsDevicePayload = Utils.formatWindowsPlugineEnginePayload(device.getString(IP_KEY), device.getString(USERNAME_KEY), device.getString(PASSWORD_KEY));
+
+    try
+    {
+      logger.info("Sending request: {}", formatWindowsDevicePayload.toString());
+
+      socket.send(formatWindowsDevicePayload.toString().getBytes(ZMQ.CHARSET), 0);
+
+      byte[] reply = socket.recv(0);
+
+      String jsonResponse = new String(reply, ZMQ.CHARSET);
+
+      JsonObject counterObject = new JsonObject(jsonResponse);
+      JsonObject formattedCounterObject = new JsonObject();
+
+      counterObject.forEach(entry -> {
+        String formattedKey =  Utils.windowsPollDataKeyFormatter(entry.getKey());
+        formattedCounterObject.put(formattedKey, entry.getValue());
+      });
+
+      QueryHandler.saveAndGetById(WINDOWS_COUNTER_RESULT_TABLE, formattedCounterObject)
+        .onSuccess(counterId->
+        {
+          QueryHandler.save(POLLLER_RESULT_TABLE, new JsonObject().put(COUNTER_ID_KEY,counterId).put(MONITOR_DEVICE_ID_KEY,deviceId).put(COUNTER_TYPE_KEY,LINUX_PLUGIN_ENGINE))
+            .onSuccess(res->
+            {
+              logger.info("Polling data dumped to DB for deviceId: {}", deviceId);
+            })
+            .onFailure(err->
+            {
+              logger.error("Failed to save polling data for device {}: {}", deviceId, err.getMessage());
+            });
+        });
+
+      logger.info("Received response for device: {}", deviceId);
+    }
+    catch (Exception e)
+    {
+      logger.error("ZMQ communication failed for device {}: {}", deviceId, e.getMessage());
     }
   }
 }

@@ -8,6 +8,8 @@ public class Constants
 
   public static final String LINUX_COUNTER_RESULT_TABLE = "linux_counter_result";
 
+  public static final String WINDOWS_COUNTER_RESULT_TABLE = "windows_counter_result";
+
   public static final String POLLLER_RESULT_TABLE = "poller_result";
 
   public static final String DISCOVERY_EVENT = "discovery";
@@ -38,6 +40,8 @@ public class Constants
 
   public static final String IP_KEY = "ip";
 
+  public static final String DEVICE_TYPE_KEY = "type";
+
   public static final String PORT_KEY = "port";
 
   public static final String LAST_POLL_TIME_KEY = "lastPollTime";
@@ -49,6 +53,8 @@ public class Constants
   public static final String PLUGIN_ENGINE_TYPE_KEY = "plugin_engine";
 
   public static final String LINUX_PLUGIN_ENGINE = "linux";
+
+  public static final String WINDOWS_PLUGIN_ENGINE = "windows";
 
   public static final String COUNTER_ID_KEY = "counter_id";
 
