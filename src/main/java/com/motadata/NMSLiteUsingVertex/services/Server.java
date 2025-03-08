@@ -2,7 +2,7 @@ package com.motadata.NMSLiteUsingVertex.services;
 
 import com.motadata.NMSLiteUsingVertex.routes.CredentialsRouter;
 import com.motadata.NMSLiteUsingVertex.routes.DiscoveryRouter;
-import com.motadata.NMSLiteUsingVertex.routes.DeviceRouter;
+import com.motadata.NMSLiteUsingVertex.routes.ProvisionRouter;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.handler.BodyHandler;
@@ -26,7 +26,7 @@ public class Server extends AbstractVerticle
 
     mainRouter.route("/api/discovery/*").subRouter(DiscoveryRouter.getRouter());
 
-    mainRouter.route("/api/devices/*").subRouter(DeviceRouter.getRouter());
+    mainRouter.route("/api/provision/*").subRouter( ProvisionRouter.getRouter());
 
     mainRouter.route("/").handler(ctx ->
     {

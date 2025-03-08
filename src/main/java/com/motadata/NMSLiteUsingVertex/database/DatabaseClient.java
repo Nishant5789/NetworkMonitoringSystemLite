@@ -14,7 +14,7 @@ public class DatabaseClient
   {
     if (pool == null)
     {
-      PgConnectOptions connectOptions = new PgConnectOptions().setPort(5432).setHost("localhost").setDatabase("NMS_LITE_2.0").setUser("postgres").setPassword("1234");
+      PgConnectOptions connectOptions = new PgConnectOptions().setPort(5432).setHost("localhost").setDatabase("NMS_LITE_3.0").setUser("postgres").setPassword("1234");
 
       PoolOptions poolOptions = new PoolOptions().setMaxSize(5);
 

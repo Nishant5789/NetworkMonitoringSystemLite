@@ -2,7 +2,7 @@ package com.motadata.NMSLiteUsingVertex;
 
 import com.motadata.NMSLiteUsingVertex.services.Server;
 import com.motadata.NMSLiteUsingVertex.verticle.DiscoveryVerticle;
-import com.motadata.NMSLiteUsingVertex.verticle.DeviceVerticle;
+import com.motadata.NMSLiteUsingVertex.verticle.ProvisionVerticle;
 import com.motadata.NMSLiteUsingVertex.verticle.PollerVerticle;
 import io.vertx.core.DeploymentOptions;
 import io.vertx.core.Future;
@@ -94,7 +94,7 @@ public class Main
 
       .compose(v -> deployVerticle(DiscoveryVerticle.class.getName(), new DeploymentOptions().setInstances(DISCOVERY_VERTICLE_INSTANCES)))
 
-      .compose(v -> deployVerticle(DeviceVerticle.class.getName(), new DeploymentOptions().setInstances(DEVICE_VERTICLE_INSTANCES)))
+      .compose(v -> deployVerticle(ProvisionVerticle.class.getName(), new DeploymentOptions().setInstances(DEVICE_VERTICLE_INSTANCES)))
 
       .compose(v -> deployVerticle(PollerVerticle.class.getName(), new DeploymentOptions().setInstances(POLLER_VERTICLE_INSTANCES).setThreadingModel(ThreadingModel.WORKER).setWorkerPoolSize(30)
       ));

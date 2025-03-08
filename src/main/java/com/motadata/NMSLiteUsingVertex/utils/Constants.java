@@ -4,13 +4,11 @@ public class Constants
 {
   public static final String CREDENTIAL_TABLE = "credential";
 
-  public static final String MONITOR_DEVICE_TABLE = "monitored_device";
+  public static final String DISCOVERY_TABLE = "discovery";
 
-  public static final String LINUX_COUNTER_RESULT_TABLE = "linux_counter_result";
+  public static final String PROVISION_TABLE = "provision";
 
-  public static final String WINDOWS_COUNTER_RESULT_TABLE = "windows_counter_result";
-
-  public static final String POLLLER_RESULT_TABLE = "poller_result";
+  public static final String POLLER_RESULTS_TABLE = "poller_results";
 
   public static final String DISCOVERY_EVENT = "discovery";
 
@@ -24,19 +22,21 @@ public class Constants
 
   public static final String NAME_HEADER_PATH = "name";
 
+  public static final String ID_HEADER_PATH = "id";
+
+  public static final String DISCOVERY_ID_HEADER_PATH = "discoveryId";
+
   public static final String USERNAME_KEY = "username";
 
   public static final String PASSWORD_KEY = "password";
 
-  public static final String DEVICE_IDS_KEYS = "device_ids";
-
-  public static final String MONITORED_DEVICE_ID_KEY = "monitored_device_id";
+  public static final String DISCOVERY_ID_KEY = "discovery_id";
 
   public static final String ID_KEY = "id";
 
   public static final String POLL_INTERVAL_KEY = "pollInterval";
 
-  public static final String IS_DISCOVERED_KEY = "is_discovered";
+  public static final String STATUS_KEY = "status";
 
   public static final String IP_KEY = "ip";
 
@@ -56,11 +56,5 @@ public class Constants
 
   public static final String WINDOWS_PLUGIN_ENGINE = "windows";
 
-  public static final String COUNTER_ID_KEY = "counter_id";
-
-  public static final String COUNTER_TYPE_KEY = "counter_type";
-
-  public static final String MONITOR_DEVICE_ID_KEY = "monitored_device_id";
-
-  public static final String TRUE_VALUE = "true";
+  public static final Boolean TRUE_VALUE = true;
 }

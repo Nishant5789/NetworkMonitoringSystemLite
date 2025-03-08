@@ -2,21 +2,22 @@ package com.motadata.NMSLiteUsingVertex.database;
 
 import com.motadata.NMSLiteUsingVertex.Main;
 import io.vertx.core.Future;
-import io.vertx.core.Promise;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.sqlclient.Pool;
 import io.vertx.sqlclient.Row;
-import io.vertx.sqlclient.RowSet;
 import io.vertx.sqlclient.Tuple;
+import org.json.JSONArray;
+import org.postgresql.util.PGobject;
 
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
-import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
+import static com.motadata.NMSLiteUsingVertex.utils.Constants.POLLER_RESULTS_TABLE;
+
 
 public class QueryHandler
 {
@@ -130,25 +131,17 @@ public class QueryHandler
   }
 
   // Generalized SELECT BY CONDITION
-  public static Future<JsonObject> getByfield(String tableName, String condition, String values)
+  public static Future<JsonObject> getByfield(String tableName, String fieldName, String fieldvalue)
   {
-    if (condition == null || condition.isEmpty())
-    {
-      return Future.failedFuture("Condition required for select_by");
-    }
+    var condition = String.format("%s = '%s'",fieldName, fieldvalue);
 
-    String query = String.format("SELECT * FROM %s WHERE %s", tableName, condition);
-
-    Tuple tuple = Tuple.of(values);
+    var query = String.format("SELECT * FROM %s WHERE %s", tableName, condition);
 
     return pool.preparedQuery(query)
-      .execute(tuple)
+      .execute()
       .map(rows ->
       {
-        if (rows.size() == 0)
-        {
-          return null;
-        }
+        if (rows.size() == 0) return null;
 
         Row row = rows.iterator().next();
 
@@ -157,12 +150,10 @@ public class QueryHandler
         for (int i = 0; i < row.size(); i++)
         {
           String column = row.getColumnName(i);
+          Object val = row.getValue(i);
 
-          Object value = row.getValue(i);
-
-          obj.put(column, value);
+          obj.put(column, val);
         }
-
         return obj;
       });
   }
@@ -170,18 +161,15 @@ public class QueryHandler
   // Find by ID
   public static Future<JsonObject> findById(String tableName, String id)
   {
-    return getByfield(tableName, "id = $1", id);
+    return getByfield(tableName, "id", id);
   }
 
   // Generalized UPDATE :find by  field & update
-  public static Future<Void> updateByField(String tableName, JsonObject payload, String condition, Object... conditionValues)
+  public static Future<Void> updateByField(String tableName, JsonObject payload, String fieldName, Object fieldvalue)
   {
-    if (condition == null || condition.isEmpty())
-    {
-      return Future.failedFuture("Condition required for update");
-    }
+    var condition = String.format("%s = '%s'",fieldName, fieldvalue);
 
-    StringBuilder setClause = new StringBuilder();
+    var setClause = new StringBuilder();
 
     Tuple tuple = Tuple.tuple();
 
@@ -189,7 +177,7 @@ public class QueryHandler
 
     for (Map.Entry<String, Object> entry : payload.getMap().entrySet())
     {
-      String column = entry.getKey();
+      var column = entry.getKey();
 
       setClause.append(column).append(" = $").append(index++);
 
@@ -201,11 +189,6 @@ public class QueryHandler
       }
     }
 
-    for (Object value : conditionValues)
-    {
-      tuple.addValue(value);
-    }
-
     String query = String.format("UPDATE %s SET %s WHERE %s", tableName, setClause, condition);
 
     return pool.preparedQuery(query)
@@ -213,115 +196,70 @@ public class QueryHandler
       .mapEmpty();
   }
 
-  // Genralized get all object based on mutiple id
-  public static Future<List<JsonObject>> getAllByIds(String tableName, JsonArray object_ids)
+  // get device data using discoveryId
+  public static Future<JsonObject> getDeviceByDiscoveryId(String discoveryId)
   {
-    Promise<List<JsonObject>> promise = Promise.promise();
+    var condition = String.format("d.id = %s", discoveryId);
+    var query = String.format("SELECT d.id, d.ip, d.port, c.username, c.password, d.type AS plugin_engine, d.status " +
+      "FROM discovery d " +
+      "JOIN credential c ON d.credential_id = c.id " +
+      "WHERE %s", condition);
 
-    List<String> ids = IntStream.range(0, object_ids.size())
-      .mapToObj(object_ids::getString)
-      .collect(Collectors.toList());
-
-    String placeholders = IntStream.range(0, ids.size())
-      .mapToObj(i -> "$" + (i + 1))
-      .collect(Collectors.joining(","));
-
-    String sql = "SELECT o.id, o.type, o.ip, o.is_discovered, o.port, c.username, c.password " + "FROM "+ tableName +" o " +
-      "INNER JOIN credential c ON o.credential_id = c.id " +
-      "WHERE o.id IN (" + placeholders + ")";
-
-    Tuple params = Tuple.tuple();
-    ids.forEach(params::addString);
-
-    pool
-      .preparedQuery(sql)
-      .execute(params)
-      .onSuccess(rows -> {
-        List<JsonObject> result = new ArrayList<>();
-        for (Row row : rows) {
-          JsonObject json = new JsonObject()
-            .put("id", row.getString("id"))
-            .put("type", row.getString("type"))
-            .put("ip", row.getString("ip"))
-            .put("is_discovered", row.getString("is_discovered"))
-            .put("port", row.getString("port").trim())
-            .put("username", row.getString("username"))
-            .put("password", row.getString("password"));
-          result.add(json);
-        }
-        System.out.println("Query result: " + result);
-        promise.complete(result);
-      })
-      .onFailure(err -> {
-        System.err.println("Query failed: " + err.getMessage());
-        promise.fail(err);
-      });
-    return promise.future();
-  }
-
-  // Fetch the device details (including type) using findById
-  public static Future<List<JsonObject>> getDeviceCounterMetrics(String monitoredDeviceId)
-  {
-    return findById("monitored_device", monitoredDeviceId)
-      .compose(device ->
+    return pool.preparedQuery(query)
+      .execute()
+      .map(rows ->
       {
-        if (device == null)
+        if (rows.size() == 0) return null;
+
+        Row row = rows.iterator().next();
+        JsonObject obj = new JsonObject();
+
+        for (int i = 0; i < row.size(); i++)
         {
-          return Future.failedFuture("Device not found: " + monitoredDeviceId);
+          obj.put(row.getColumnName(i), row.getValue(i));
         }
-
-        String counterType = device.getString("type");
-
-        if (counterType == null)
-        {
-          return Future.failedFuture("Counter type not found for device: " + monitoredDeviceId);
-        }
-
-        String tableName = switch (counterType.toLowerCase())
-        {
-          case "linux" -> "linux_counter_result";
-          case "windows" -> "windows_counter_result";
-          default -> null;
-        };
-
-        if (tableName == null)
-        {
-          return Future.failedFuture("Unsupported counter type: " + counterType);
-        }
-
-        String query = String.format (
-          "SELECT cr.* " +
-            "FROM %s cr " +
-            "JOIN poller_result pr ON pr.counter_id = cr.id " +
-            "WHERE pr.monitored_device_id = $1 " +
-            "AND pr.counter_type = $2", tableName
-        );
-
-        Tuple params = Tuple.of(monitoredDeviceId, counterType);
-
-        return pool.preparedQuery(query)
-          .execute(params)
-          .map(rows ->
-          {
-            List<JsonObject> results = new ArrayList<>();
-            for (Row row : rows)
-            {
-              JsonObject obj = new JsonObject();
-              for (int i = 0; i < row.size(); i++)
-              {
-                String column = row.getColumnName(i);
-                Object value = row.getValue(i);
-                obj.put(column, value);
-              }
-              results.add(obj);
-            }
-            return results;
-          });
+        return obj;
       });
   }
 
-  // handle delete by using tableId & tableName
-  public static Future<Boolean> deleteByIdAndTableName(String id, String tableName)
+  // get polling data using discoveryId
+  public static Future<JsonArray> getPollerData(String discoveryId)
+  {
+    var query = String.format("SELECT * FROM %s WHERE discovery_id = %S", POLLER_RESULTS_TABLE, discoveryId);
+
+    return pool.preparedQuery(query)
+      .execute()
+      .map(rows ->
+      {
+        JsonArray jsonArray = new JsonArray();
+
+        if (rows.size() == 0) return null;
+
+        for (Row row : rows) {
+          JsonObject obj = new JsonObject();
+
+          for (int i = 0; i < row.size(); i++) {
+            String column = row.getColumnName(i);
+            Object val = row.getValue(i);
+
+            if (val instanceof PGobject pgObject && "jsonb".equalsIgnoreCase(pgObject.getType()))
+            {
+              val = new JsonObject(pgObject.getValue());
+            }
+            else if (val instanceof OffsetDateTime offsetDateTime)
+            {
+              val = offsetDateTime.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+            }
+            obj.put(column, val);
+          }
+          jsonArray.add(obj);
+        }
+        return jsonArray;
+      });
+  }
+
+  // handle delete by using tableId
+  public static Future<Boolean> deleteById(String id, String tableName)
   {
     if (!List.of("monitored_device", "poller_result", "credential", "linux_counter_result", "windows_counter_result",  "snmp_interface_counter_result", "snmp_device_counter_result").contains(tableName))
     {

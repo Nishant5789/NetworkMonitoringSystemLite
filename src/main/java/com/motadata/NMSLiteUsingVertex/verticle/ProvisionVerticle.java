@@ -16,9 +16,9 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
 
-public class DeviceVerticle extends AbstractVerticle
+public class ProvisionVerticle extends AbstractVerticle
 {
-  private static final Logger logger = LoggerFactory.getLogger(DeviceVerticle.class);
+  private static final Logger logger = LoggerFactory.getLogger(ProvisionVerticle.class);
 
   public static final Queue<JsonObject> deviceQueue = new ConcurrentLinkedQueue<>();
 
@@ -36,72 +36,49 @@ public class DeviceVerticle extends AbstractVerticle
     startPromise.complete();
   }
 
-  // handle provision
+  // handle provisioning
   private void provision(Message<Object> message)
   {
     JsonObject payload = (JsonObject) message.body();
 
-    JsonArray deviceIds = payload.getJsonArray(DEVICE_IDS_KEYS);
+    String discoveryId = String.valueOf(payload.getInteger(DISCOVERY_ID_KEY));
 
-    String  pollInterval = payload.getString(POLL_INTERVAL_KEY);
+    String  pollInterval = String.valueOf(payload.getInteger(POLL_INTERVAL_KEY));
 
-    QueryHandler.getAllByIds(MONITOR_DEVICE_TABLE, deviceIds)
-      .onSuccess(devices->
-    {
-      if(devices.isEmpty())
+    QueryHandler.getDeviceByDiscoveryId(discoveryId)
+      .onSuccess(discoveryRecord->
       {
-        logger.info("Device is not found in database");
+        if (discoveryRecord == null)
+        {
+          logger.info("Discovery is not found in database");
+          message.reply(Utils.createResponse("failed", "discovery is not found"));
+          return;
+        }
 
-        message.reply(Utils.createResponse("failed", "device is not found"));
+        String discoveryStatus = discoveryRecord.getString("status");
 
-        return;
-      }
-      for(JsonObject device : devices)
-      {
+        if (discoveryStatus.equals("false"))
+        {
+          message.reply(Utils.createResponse("failed", "device is not discovered"));
+          return;
+        }
 
-        String isDiscovered = device.getString(IS_DISCOVERED_KEY);
+        JsonObject device = new JsonObject(String.valueOf(discoveryRecord));
+        device.put(EVENT_NAME_KEY, LINUX_PLUGIN_ENGINE);
+        device.put(PORT_KEY,String.valueOf(device.getInteger(PORT_KEY)));
 
-        if(isDiscovered.equals("false"))
-          continue;
+        deviceQueue.add(device.put("lastPollTime", System.currentTimeMillis()));
 
-        String ip = device.getString(IP_KEY);
+        logger.info("Device's ip: {} added in deviceQueue", device.getString(IP_KEY));
 
-        String port = device.getString(PORT_KEY);
-
-        Utils.checkDeviceAvailability(ip,port)
-          .onSuccess(flag->
-          {
-            if(flag)
-            {
-              deviceQueue.add(device.put("lastPollTime",System.currentTimeMillis()));
-
-              logger.info("Device's ip: {} added in deviceQueue", ip);
-
-              message.reply(Utils.createResponse("success", "Polling is started for provisioned device"));
-            }
-            else
-            {
-              logger.warn("Device's ip: {} with Port: {} is not reachable", ip, port);
-
-              message.reply(Utils.createResponse("failed", "Device's ip: "+ip+" with Port: "+port+ " is not reachable"));
-            }
-          })
-          .onFailure(err->
-          {
-            logger.error("Device {} not available: {}", ip, err.getMessage());
-
-            message.reply(Utils.createResponse("failed", "Device " + ip + " not available"));
-          });
-      }
-
-      handleDeviceScheduling(Integer.parseInt(pollInterval));
+        message.reply(Utils.createResponse("success", "Polling is started for provisioned device"));
+        handleDeviceScheduling(Integer.parseInt(pollInterval));
     })
-      .onFailure(err ->
-    {
-      logger.error("Failed to fetch device data: {}", err.getMessage());
-
-      message.reply(Utils.createResponse("failed", "Database query failed"));
-    });
+      .onFailure(err->
+      {
+        logger.warn("database query failed");
+        message.reply(Utils.createResponse("error", err.getMessage()));
+      });
   }
 
   // schedule device polling
@@ -111,7 +88,7 @@ public class DeviceVerticle extends AbstractVerticle
     {
       logger.info("Polling is started, deviceQueue: {}", deviceQueue);
 
-      long currentTime = System.currentTimeMillis();
+      var currentTime = System.currentTimeMillis();
 
       JsonArray devicesToPoll = new JsonArray();
 
@@ -157,7 +134,7 @@ public class DeviceVerticle extends AbstractVerticle
   {
     String monitorDeviceId = (String) message.body();
 
-    QueryHandler.deleteByIdAndTableName(monitorDeviceId,MONITOR_DEVICE_TABLE)
+    QueryHandler.deleteById(monitorDeviceId,DISCOVERY_TABLE)
       .onSuccess(deleted -> {
         if (deleted)
         {
@@ -180,16 +157,16 @@ public class DeviceVerticle extends AbstractVerticle
   // get polling data from device id
   private void getPollerResult(Message<Object> message)
   {
-    String monitorDeviceId = (String) message.body();
+    String discoveryId = (String) message.body();
 
-    QueryHandler.getDeviceCounterMetrics(monitorDeviceId)
-      .onSuccess(metricsResult->
+    QueryHandler.getPollerData(discoveryId)
+      .onSuccess(metricsResult ->
       {
-        message.reply(new JsonObject().put("metrics", metricsResult));
+        message.reply(metricsResult);
       })
       .onFailure(err->
       {
-        logger.error("Failed to fetch device data for deviceID {}: {}", monitorDeviceId, err.getMessage());
+        logger.error("Failed to fetch device data for discoveryId {}: {}", discoveryId, err.getMessage());
 
         message.reply(new JsonObject().put("status", "failed").put("statusMsg", "Database query failed" + err.getMessage()));
       });

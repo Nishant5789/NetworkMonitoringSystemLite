@@ -2,40 +2,42 @@ package com.motadata.NMSLiteUsingVertex.routes;
 
 import com.motadata.NMSLiteUsingVertex.Main;
 import com.motadata.NMSLiteUsingVertex.utils.Utils;
-import io.vertx.core.Vertx;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
+import static com.motadata.NMSLiteUsingVertex.utils.Utils.formatInvalidResponse;
 
-public class DeviceRouter
+public class ProvisionRouter
 {
   private  static final Router router = Router.router(Main.vertx());
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(DeviceRouter.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(ProvisionRouter.class);
 
   // return subrouter for deviceRouting
   public static Router getRouter()
   {
-    // POST /api/devices/provision - Handle device provisioning
-    router.post("/provision").handler(ctx ->
+    // POST /api/provision/ - Handle device provisioning
+    router.post("/").handler(ctx ->
     {
-      JsonObject requestBody = ctx.body().asJsonObject();
+      JsonObject payload = ctx.body().asJsonObject();
 
-      if (requestBody == null)
+      var payloadValidationResult = Utils.isValidPayload(PROVISION_TABLE, payload);
+
+      if (payloadValidationResult.get("isValid").equals("false"))
       {
-        LOGGER.error("Provisioning request failed: No request body");
+        var errorResponse = Utils.createResponse("error", formatInvalidResponse(payloadValidationResult));
 
-        ctx.response().setStatusCode(400).end(new JsonObject().put("error", "Invalid request body").encodePrettily());
-
+        ctx.response().setStatusCode(400).end(errorResponse.encodePrettily());
         return;
       }
 
-      LOGGER.info("Received provisioning request: {}", requestBody);
+      LOGGER.info("Received provisioning request: {}", payload);
 
-      ctx.vertx().eventBus().request(PROVISION_EVENT, requestBody, reply ->
+      ctx.vertx().eventBus().request(PROVISION_EVENT, payload, reply ->
       {
         if (reply.succeeded())
         {
@@ -56,18 +58,18 @@ public class DeviceRouter
       });
     });
 
-//     GET /api/devices/:monitored_device_id - fetch devicePolling data
-    router.get("/:monitored_device_id").handler(ctx ->
+    // GET /api/provision/:discovery_id - fetch devicePolling data
+    router.get("/:discovery_id").handler(ctx ->
     {
       LOGGER.info("Fetching devicePolling data");
 
-      String monitoredDeviceID = ctx.pathParam(MONITORED_DEVICE_ID_KEY);
+      String discoveryId = ctx.pathParam(DISCOVERY_ID_KEY);
 
-      ctx.vertx().eventBus().request(GET_POLLING_DATA_EVENT, monitoredDeviceID, reply ->
+      ctx.vertx().eventBus().request(GET_POLLING_DATA_EVENT, discoveryId, reply ->
       {
         if (reply.succeeded())
         {
-          JsonObject response = (JsonObject) reply.result().body();
+          JsonArray response = (JsonArray) reply.result().body();
 
           LOGGER.info("Device Polling data fetched successfully");
 
@@ -84,10 +86,10 @@ public class DeviceRouter
       });
     });
 
-    // delete api/devices/:monitored_device_id
-    router.delete("/:monitored_device_id").handler(ctx->
+    // delete api/devices/:discovery_id
+    router.delete("/:discovery_id").handler(ctx->
     {
-      String monitoredDeviceID = ctx.pathParam(MONITORED_DEVICE_ID_KEY);
+      String monitoredDeviceID = ctx.pathParam(DISCOVERY_ID_KEY);
 
       ctx.vertx().eventBus().request(DELETE_DEVICE_EVENT, monitoredDeviceID, reply ->
         {

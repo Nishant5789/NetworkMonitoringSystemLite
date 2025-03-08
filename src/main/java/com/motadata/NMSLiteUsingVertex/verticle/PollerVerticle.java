@@ -42,7 +42,7 @@ public class PollerVerticle extends AbstractVerticle
     {
       JsonObject device = (JsonObject) deviceObj;
 
-      String deviceType = device.getString(DEVICE_TYPE_KEY);
+      String deviceType = device.getString(PLUGIN_ENGINE_TYPE_KEY);
 
       if(deviceType.contains("linux"))
       {
@@ -61,7 +61,8 @@ public class PollerVerticle extends AbstractVerticle
   {
     device.put(EVENT_NAME_KEY,POLLING_EVENT).put(PLUGIN_ENGINE_TYPE_KEY, LINUX_PLUGIN_ENGINE);
 
-    String deviceId = device.getString(ID_KEY);
+    Integer deviceId = device.getInteger(ID_KEY);
+    String deviceIp = device.getString(IP_KEY);
 
     try
     {
@@ -81,18 +82,19 @@ public class PollerVerticle extends AbstractVerticle
         counterObject.put(jsonObject.getString("name"),jsonObject.getString("value"));
       }
 
-      QueryHandler.saveAndGetById(LINUX_COUNTER_RESULT_TABLE, counterObject)
-        .onSuccess(counterId->
+      JsonObject pollResponcePayload = new JsonObject()
+        .put("discovery_id", deviceId)
+        .put("ip", deviceIp)
+        .put("counter_result", counterObject);
+
+      QueryHandler.save(POLLER_RESULTS_TABLE, pollResponcePayload)
+        .onSuccess(res->
         {
-          QueryHandler.save(POLLLER_RESULT_TABLE, new JsonObject().put(COUNTER_ID_KEY,counterId).put(MONITOR_DEVICE_ID_KEY,deviceId).put(COUNTER_TYPE_KEY,LINUX_PLUGIN_ENGINE))
-            .onSuccess(res->
-            {
-              logger.info("Polling data dumped to DB for deviceId: {}", deviceId);
-            })
-            .onFailure(err->
-            {
-              logger.error("Failed to save polling data for device {}: {}", deviceId, err.getMessage());
-            });
+          logger.info("Polling data dumped to DB for deviceId: {}", deviceId);
+        })
+        .onFailure(err->
+        {
+          logger.error("Failed to save polling data for device {}: {}", deviceId, err.getMessage());
         });
 
       logger.info("Received response for device: {}", deviceId);
@@ -103,23 +105,13 @@ public class PollerVerticle extends AbstractVerticle
     }
   }
 
-  // handle Polling data dump to file
-  private static void writeJsonToFile(String fileName, String jsonData) throws IOException
-  {
-    try (FileWriter file = new FileWriter(fileName))
-    {
-      file.write(jsonData);
-
-      logger.info("Response written to file: {}", fileName);
-    }
-  }
-
   // handle windows device polling data
   private void handleWindowsPollingData(JsonObject device, ZMQ.Socket socket)
   {
-    String deviceId = device.getString(ID_KEY);
 
-    JsonObject formatWindowsDevicePayload = Utils.formatWindowsPlugineEnginePayload(device.getString(IP_KEY), device.getString(USERNAME_KEY), device.getString(PASSWORD_KEY));
+    Integer deviceId = device.getInteger(ID_KEY);
+    String deviceIp = device.getString(IP_KEY);
+    JsonObject formatWindowsDevicePayload = Utils.formatWindowsPlugineEnginePayload(String.valueOf(deviceId), device.getString(USERNAME_KEY), device.getString(PASSWORD_KEY));
 
     try
     {
@@ -139,18 +131,19 @@ public class PollerVerticle extends AbstractVerticle
         formattedCounterObject.put(formattedKey, entry.getValue());
       });
 
-      QueryHandler.saveAndGetById(WINDOWS_COUNTER_RESULT_TABLE, formattedCounterObject)
-        .onSuccess(counterId->
+      JsonObject pollResponcePayload = new JsonObject()
+        .put("discovery_id", deviceId)
+        .put("ip", deviceIp)
+        .put("counter_result", counterObject);
+
+      QueryHandler.save(POLLER_RESULTS_TABLE, pollResponcePayload)
+        .onSuccess(res->
         {
-          QueryHandler.save(POLLLER_RESULT_TABLE, new JsonObject().put(COUNTER_ID_KEY,counterId).put(MONITOR_DEVICE_ID_KEY,deviceId).put(COUNTER_TYPE_KEY,LINUX_PLUGIN_ENGINE))
-            .onSuccess(res->
-            {
-              logger.info("Polling data dumped to DB for deviceId: {}", deviceId);
-            })
-            .onFailure(err->
-            {
-              logger.error("Failed to save polling data for device {}: {}", deviceId, err.getMessage());
-            });
+          logger.info("Polling data dumped to DB for deviceId: {}", deviceId);
+        })
+        .onFailure(err->
+        {
+          logger.error("Failed to save polling data for device {}: {}", deviceId, err.getMessage());
         });
 
       logger.info("Received response for device: {}", deviceId);
