@@ -7,7 +7,6 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.sqlclient.Pool;
 import io.vertx.sqlclient.Row;
 import io.vertx.sqlclient.Tuple;
-import org.json.JSONArray;
 import org.postgresql.util.PGobject;
 
 import java.time.OffsetDateTime;
@@ -22,7 +21,7 @@ import static com.motadata.NMSLiteUsingVertex.utils.Constants.POLLER_RESULTS_TAB
 public class QueryHandler
 {
   // Instance-level pool
-  private static final Pool pool = com.motadata.NMSLiteUsingVertex.database.DatabaseClient.getPool(Main.vertx());
+  private static final Pool pool = com.motadata.NMSLiteUsingVertex.database.DatabaseClient.getPool();
 
   // Generalized save
   public static Future<Void> save(String tableName, JsonObject payload)
@@ -58,51 +57,6 @@ public class QueryHandler
     return pool.preparedQuery(query)
       .execute(tuple)
       .mapEmpty();
-  }
-
-  // save and return the ID of the newly inserted row
-  public static Future<String> saveAndGetById(String tableName, JsonObject payload)
-  {
-    StringBuilder columns = new StringBuilder();
-
-    StringBuilder placeholders = new StringBuilder();
-
-    Tuple tuple = Tuple.tuple();
-
-    int index = 1;
-
-    for (Map.Entry<String, Object> entry : payload.getMap().entrySet())
-    {
-      String column = entry.getKey();
-
-      columns.append(column);
-
-      placeholders.append("$").append(index++);
-
-      tuple.addValue(entry.getValue());
-
-      if (index <= payload.size())
-      {
-        columns.append(", ");
-
-        placeholders.append(", ");
-      }
-    }
-
-    String query = String.format("INSERT INTO %s (%s) VALUES (%s) RETURNING id", tableName, columns, placeholders);
-
-    return pool.preparedQuery(query)
-      .execute(tuple)
-      .map(rows ->
-      {
-        if (rows.size() == 0)
-        {
-          throw new RuntimeException("Insert failed: no ID returned");
-        }
-        Row row = rows.iterator().next();
-
-        return row.getString("id");
-      });
   }
 
   // Generalized SELECT ALL
@@ -259,16 +213,16 @@ public class QueryHandler
   }
 
   // handle delete by using tableId
-  public static Future<Boolean> deleteById(String id, String tableName)
+  public static Future<Boolean> deleteById(String tableName, String id)
   {
-    if (!List.of("monitored_device", "poller_result", "credential", "linux_counter_result", "windows_counter_result",  "snmp_interface_counter_result", "snmp_device_counter_result").contains(tableName))
+    if (!List.of("discovery", "poller_results", "credential").contains(tableName))
     {
       return Future.failedFuture("Invalid table name: " + tableName);
     }
 
     String query = "DELETE FROM " + tableName + " WHERE id = $1";
 
-    Tuple params = Tuple.of(id);
+    Tuple params = Tuple.of(Integer.parseInt(id));
 
     return pool.preparedQuery(query)
       .execute(params)

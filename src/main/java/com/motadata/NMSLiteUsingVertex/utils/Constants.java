@@ -16,15 +16,13 @@ public class Constants
 
   public static final String GET_POLLING_DATA_EVENT = "get_polling_data";
 
-  public static final String DELETE_DEVICE_EVENT = "delete_device";
-
   public static final String POLLING_EVENT = "polling";
 
   public static final String NAME_HEADER_PATH = "name";
 
   public static final String ID_HEADER_PATH = "id";
 
-  public static final String DISCOVERY_ID_HEADER_PATH = "discoveryId";
+  public static final String DISCOVERY_ID_HEADER_PATH = "discovery_id";
 
   public static final String USERNAME_KEY = "username";
 

@@ -4,26 +4,26 @@ import com.motadata.NMSLiteUsingVertex.Main;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.json.JsonObject;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.logging.Logger;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
 
-public class Utils {
+public class Utils
+{
 
-  private static final Logger log = LoggerFactory.getLogger(Utils.class);
+  private static final Logger log = AppLogger.getLogger();
 
   // create send responceObject
-  public static JsonObject createResponse(String status, String statusMsg) {
+  public static JsonObject createResponse(String status, String statusMsg)
+  {
     return new JsonObject()
       .put("status", status)
       .put("statusMsg", statusMsg);
@@ -36,7 +36,7 @@ public class Utils {
     {
       try
       {
-        String command = "ping -c 3 " + ip + " | awk '/packets transmitted/ {if ($6 == \"0%\") print \"true\"; else print \"false\"}'";
+        var command = "ping -c 3 " + ip + " | awk '/packets transmitted/ {if ($6 == \"0%\") print \"true\"; else print \"false\"}'";
 
         ProcessBuilder processBuilder = new ProcessBuilder("sh", "-c", command);
 
@@ -46,12 +46,12 @@ public class Utils {
 
         BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
 
-        String output = reader.readLine();
+        var output = reader.readLine();
 
-        int exitCode = process.waitFor();
+        var exitCode = process.waitFor();
         if (exitCode != 0)
         {
-          log.error("Ping command execution failed with exit code: {}", exitCode);
+          log.severe("Ping command execution failed with exit code: " + exitCode);
           return false;
         }
 
@@ -59,27 +59,35 @@ public class Utils {
       }
       catch (IOException | InterruptedException e)
       {
-        log.error("Exception occurred during ping execution: {}", e.getMessage(), e);
+        log.severe("Exception occurred during ping execution: " + e.getMessage());
         return false;
       }
     });
   }
 
   // check port is reachable
-  public static Future<Boolean> checkPort(String ip, String port) {
+  public static Future<Boolean> checkPort(String ip, String port)
+  {
     Promise<Boolean> promise = Promise.promise();
-    try {
-      Main.vertx().createNetClient().connect(Integer.parseInt(port), ip, res -> {
-        if (res.succeeded()) {
-          log.info("Successful TCP connection for IP: {} Port: {}", ip, port);
+    try
+    {
+      Main.vertx().createNetClient().connect(Integer.parseInt(port), ip, res ->
+      {
+        if (res.succeeded())
+        {
+          log.info("Successful TCP connection for IP: " + ip + " Port: " + port);
           promise.complete(true);
-        } else {
-          log.error("Failed TCP connection for IP: {} Port: {} - {}", ip, port, res.cause().getMessage());
+        }
+        else
+        {
+          log.severe("Failed TCP connection for IP: " + ip + " Port: " + port + " - " + res.cause().getMessage());
           promise.complete(false);
         }
       });
-    } catch (Exception exception) {
-      log.error("Failed to connect to IP {} Port: {} - {}", ip, port, exception.getMessage(), exception);
+    }
+    catch (Exception exception)
+    {
+      log.severe("Failed to connect to IP " + ip + " Port: " + port + " - " + exception.getMessage());
       promise.fail(exception);
     }
 
@@ -87,17 +95,25 @@ public class Utils {
   }
 
   // check device reachability
-  public static Future<Boolean> checkDeviceAvailability(String ip, String port) {
-    try {
-      return ping(ip).compose(isPingReachable -> {
-        if (isPingReachable) {
+  public static Future<Boolean> checkDeviceAvailability(String ip, String port)
+  {
+    try
+    {
+      return ping(ip).compose(isPingReachable ->
+      {
+        if (isPingReachable)
+        {
           return checkPort(ip, port);
-        } else {
+        }
+        else
+        {
           return Future.failedFuture("Device is not reachable");
         }
       });
-    } catch (Exception exception) {
-      log.error("Failed to check device availability: {}", exception.getMessage(), exception);
+    }
+    catch (Exception exception)
+    {
+      log.severe("Failed to check device availability: " + exception.getMessage());
       return Future.failedFuture("Failed to check device availability. " + exception.getMessage());
     }
   }
@@ -244,13 +260,17 @@ public class Utils {
     }
     else
     {
-      try {
+      try
+      {
         int pollInterval = payload.getInteger("pollInterval");
-        if (pollInterval <= 0) {
+        if (pollInterval <= 0)
+        {
           response.put("isValid", "false");
           response.put("pollIntervalError", "'pollInterval' must be a positive number");
         }
-      } catch (NumberFormatException e) {
+      }
+      catch (NumberFormatException e)
+      {
         response.put("isValid", "false");
         response.put("pollIntervalError", "'pollInterval' must be a numeric string");
       }
@@ -258,6 +278,7 @@ public class Utils {
 
     return response;
   }
+
   // Validate IP Address (Both IPv4 & IPv6)
   private static boolean isValidIPAddress(String ip)
   {
@@ -278,11 +299,15 @@ public class Utils {
     StringBuilder result = new StringBuilder();
     result.append(Character.toLowerCase(key.charAt(0)));
 
-    for (int i = 1; i < key.length(); i++) {
+    for (int i = 1; i < key.length(); i++)
+    {
       char ch = key.charAt(i);
-      if (Character.isUpperCase(ch)) {
+      if (Character.isUpperCase(ch))
+      {
         result.append('_').append(Character.toLowerCase(ch));
-      } else {
+      }
+      else
+      {
         result.append(ch);
       }
     }

@@ -2,25 +2,25 @@ package com.motadata.NMSLiteUsingVertex.verticle;
 
 import com.motadata.NMSLiteUsingVertex.config.ZMQConfig;
 import com.motadata.NMSLiteUsingVertex.database.QueryHandler;
+import com.motadata.NMSLiteUsingVertex.utils.AppLogger;
 import com.motadata.NMSLiteUsingVertex.utils.Utils;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Future;
 import io.vertx.core.eventbus.Message;
 import io.vertx.core.json.JsonObject;
 import org.zeromq.ZMQ;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import java.util.logging.Logger;
 
 import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
 
 public class DiscoveryVerticle extends AbstractVerticle
 {
-  private static final Logger logger = LoggerFactory.getLogger(DiscoveryVerticle.class);
-
+  private static final Logger logger = AppLogger.getLogger();
   @Override
   public void start()
   {
-    logger.info("Discovery Verticle deployed: {}", Thread.currentThread().getName());
+    logger.info("Discovery Verticle deployed: " + Thread.currentThread().getName());
 
     vertx.eventBus().consumer(DISCOVERY_EVENT, this::discovery);
   }
@@ -50,7 +50,7 @@ public class DiscoveryVerticle extends AbstractVerticle
             {
               vertx.executeBlocking(promise ->
               {
-                JsonObject discoveryPayload =  new JsonObject();
+                var discoveryPayload =  new JsonObject();
 
                 discoveryPayload
                   .put(USERNAME_KEY, credential.getString(USERNAME_KEY))
@@ -78,7 +78,7 @@ public class DiscoveryVerticle extends AbstractVerticle
                 }
                 else
                 {
-                  logger.error("Error during discovery: ", result.cause());
+                  logger.severe("Error during discovery: " + result.cause().getMessage());
                   message.reply(Utils.createResponse("failed", result.cause().getMessage()));
                 }
               });
@@ -90,33 +90,33 @@ public class DiscoveryVerticle extends AbstractVerticle
           });
       })
       .onFailure(err->
-      {
-        logger.warn("Discovery failed for device IP: {} Port: {}", ip, port);
-        message.reply(Utils.createResponse("error", err.getMessage()));
-      }
+        {
+          logger.warning("Discovery failed for device IP: " + ip + " Port: " + port);
+          message.reply(Utils.createResponse("error", err.getMessage()));
+        }
       );
   }
 
-  // handle discovery rechaility using plugin engine
+  // handle discovery reachability using plugin engine
   private Future<String> checkDiscovery(JsonObject requestJson)
   {
     try
     {
       ZMQ.Socket socket = new ZMQConfig("tcp://127.0.0.1:5555").getSocket();
 
-      logger.info("Sending request: {}", requestJson.toString());
+      logger.info("Sending request: " + requestJson.toString());
 
       socket.send(requestJson.toString().getBytes(ZMQ.CHARSET), 0);
 
       byte[] reply = socket.recv(0);
 
-      String jsonResponse = new String(reply, ZMQ.CHARSET);
+      var jsonResponse = new String(reply, ZMQ.CHARSET);
 
-      logger.info("Received response:\n{}", jsonResponse);
+      logger.info("Received response:\n" + jsonResponse);
 
-      JsonObject responceObject = new JsonObject(jsonResponse);
+      var responseObject = new JsonObject(jsonResponse);
 
-      if(responceObject.getString("status").equals("failed"))
+      if(responseObject.getString("status").equals("failed"))
       {
         return Future.failedFuture(Utils.createResponse("failed", jsonResponse).encode());
       }
