@@ -15,13 +15,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import static com.motadata.NMSLiteUsingVertex.utils.Constants.POLLER_RESULTS_TABLE;
+import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
 
 
 public class QueryHandler
 {
   // Instance-level pool
-  private static final Pool pool = com.motadata.NMSLiteUsingVertex.database.DatabaseClient.getPool();
+  private static final Pool pool = DatabaseClient.getPool();
 
   // Generalized save
   public static Future<Void> save(String tableName, JsonObject payload)
@@ -42,7 +42,7 @@ public class QueryHandler
 
       placeholders.append("$").append(index++);
 
-      tuple.addValue(entry.getValue());
+      tuple.addValue(entry.getValue() instanceof List ? new JsonArray((List<?>) entry.getValue()).encode() : entry.getValue());
 
       if (index <= payload.size())
       {
@@ -112,10 +112,52 @@ public class QueryHandler
       });
   }
 
+  // Genralized SELECT ALL BY CONDITION
+  public static Future<JsonArray> getAllByfield(String tableName, String fieldName, String fieldvalue)
+  {
+    var condition = String.format("%s = '%s'",fieldName, fieldvalue);
+
+    var query = String.format("SELECT * FROM %s WHERE %s", tableName, condition);
+
+    return pool.preparedQuery(query)
+      .execute()
+      .map(rows ->
+      {
+        JsonArray jsonArray = new JsonArray();
+
+        if (rows.size() == 0) return null;
+
+        for (Row row : rows) {
+          JsonObject obj = new JsonObject();
+
+          for (int i = 0; i < row.size(); i++)
+          {
+            String column = row.getColumnName(i);
+            Object val = row.getValue(i);
+
+            if (val instanceof PGobject pgObject && "jsonb".equalsIgnoreCase(pgObject.getType()))
+            {
+              val = new JsonObject(pgObject.getValue());
+            }
+            obj.put(column, val);
+          }
+          jsonArray.add(obj);
+        }
+        return jsonArray;
+      });
+  }
+
   // Find by ID
   public static Future<JsonObject> findById(String tableName, String id)
   {
-    return getByfield(tableName, "id", id);
+    String tableId = switch (tableName)
+    {
+      case CREDENTIAL_TABLE -> CREDENTIAL_ID_KEY;
+      case DISCOVERY_TABLE -> DISCOVERY_ID_KEY;
+      case PROVISIONED_OBJECTS_TABLE -> OBJECT_ID_KEY;
+      default -> ID_KEY;
+    };
+    return getByfield(tableName, tableId, id);
   }
 
   // Generalized UPDATE :find by  field & update
@@ -150,79 +192,25 @@ public class QueryHandler
       .mapEmpty();
   }
 
-  // get device data using discoveryId
-  public static Future<JsonObject> getDeviceByDiscoveryId(String discoveryId)
-  {
-    var condition = String.format("d.id = %s", discoveryId);
-    var query = String.format("SELECT d.id, d.ip, d.port, c.username, c.password, d.type AS plugin_engine, d.status " +
-      "FROM discovery d " +
-      "JOIN credential c ON d.credential_id = c.id " +
-      "WHERE %s", condition);
-
-    return pool.preparedQuery(query)
-      .execute()
-      .map(rows ->
-      {
-        if (rows.size() == 0) return null;
-
-        Row row = rows.iterator().next();
-        JsonObject obj = new JsonObject();
-
-        for (int i = 0; i < row.size(); i++)
-        {
-          obj.put(row.getColumnName(i), row.getValue(i));
-        }
-        return obj;
-      });
-  }
-
-  // get polling data using discoveryId
-  public static Future<JsonArray> getPollerData(String discoveryId)
-  {
-    var query = String.format("SELECT * FROM %s WHERE discovery_id = %S", POLLER_RESULTS_TABLE, discoveryId);
-
-    return pool.preparedQuery(query)
-      .execute()
-      .map(rows ->
-      {
-        JsonArray jsonArray = new JsonArray();
-
-        if (rows.size() == 0) return null;
-
-        for (Row row : rows) {
-          JsonObject obj = new JsonObject();
-
-          for (int i = 0; i < row.size(); i++) {
-            String column = row.getColumnName(i);
-            Object val = row.getValue(i);
-
-            if (val instanceof PGobject pgObject && "jsonb".equalsIgnoreCase(pgObject.getType()))
-            {
-              val = new JsonObject(pgObject.getValue());
-            }
-            else if (val instanceof OffsetDateTime offsetDateTime)
-            {
-              val = offsetDateTime.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
-            }
-            obj.put(column, val);
-          }
-          jsonArray.add(obj);
-        }
-        return jsonArray;
-      });
-  }
-
   // handle delete by using tableId
-  public static Future<Boolean> deleteById(String tableName, String id)
+  public static Future<Boolean> deleteById(String tableName, String idValue)
   {
-    if (!List.of("discovery", "poller_results", "credential").contains(tableName))
+    if (!List.of(DISCOVERY_TABLE, CREDENTIAL_TABLE, POLLING_RESULTS_TABLE, PROVISIONED_OBJECTS_TABLE).contains(tableName))
     {
       return Future.failedFuture("Invalid table name: " + tableName);
     }
 
-    String query = "DELETE FROM " + tableName + " WHERE id = $1";
+    String tableId = switch (tableName)
+    {
+      case CREDENTIAL_TABLE -> CREDENTIAL_ID_KEY;
+      case DISCOVERY_TABLE -> DISCOVERY_ID_KEY;
+      case PROVISIONED_OBJECTS_TABLE -> MONITOR_ID_KEY;
+      default -> ID_KEY;
+    };
 
-    Tuple params = Tuple.of(Integer.parseInt(id));
+    String query = "DELETE FROM " + tableName + " WHERE " + tableId + " = $1";
+
+    Tuple params = Tuple.of(Integer.parseInt(idValue));
 
     return pool.preparedQuery(query)
       .execute(params)

@@ -8,13 +8,13 @@ public class ZMQConfig
 
   private final ZMQ.Socket socket;
 
-  public ZMQConfig(String address)
+  public ZMQConfig()
   {
     this.context = ZMQ.context(1);
 
     this.socket = context.socket(ZMQ.REQ);
 
-    socket.connect(address);
+    socket.connect("tcp://127.0.0.1:5555");
   }
 
   // return socket instance

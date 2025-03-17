@@ -1,17 +1,19 @@
 package com.motadata.NMSLiteUsingVertex;
 
 import com.motadata.NMSLiteUsingVertex.database.DatabaseClient;
-import com.motadata.NMSLiteUsingVertex.services.Server;
+import com.motadata.NMSLiteUsingVertex.api.Server;
+import com.motadata.NMSLiteUsingVertex.services.Discovery;
+import com.motadata.NMSLiteUsingVertex.services.ObjectManager;
+import com.motadata.NMSLiteUsingVertex.services.Poller;
 import com.motadata.NMSLiteUsingVertex.utils.AppLogger;
-import com.motadata.NMSLiteUsingVertex.verticle.DiscoveryVerticle;
-import com.motadata.NMSLiteUsingVertex.verticle.ProvisionVerticle;
-import com.motadata.NMSLiteUsingVertex.verticle.PollerVerticle;
+import com.motadata.NMSLiteUsingVertex.utils.Utils;
 import io.vertx.core.DeploymentOptions;
 import io.vertx.core.Future;
 import io.vertx.core.ThreadingModel;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
 import io.vertx.core.eventbus.EventBusOptions;
+
 import java.util.logging.Logger;
 
 public class Main
@@ -20,7 +22,7 @@ public class Main
 
   private static final int SERVER_VERTICLE_INSTANCES = 1;
 
-  private static final int POLLER_VERTICLE_INSTANCES = 2;
+  private static final int POLLER_VERTICLE_INSTANCES = 1;
 
   private static final int PROVISION_VERTICLE_INSTANCES = 1;
 
@@ -34,7 +36,9 @@ public class Main
 
   private static final int EVENT_BUS_RECONNECT_INTERVAL = 10000;
 
-  private static final Logger LOGGER =  AppLogger.getLogger();
+//  private static final Logger LOGGER =  AppLogger.getLogger();
+
+  private static final Logger LOGGER =  Logger.getLogger(Main.class.getName());
 
   private static final Vertx vertx = Vertx.vertx( new VertxOptions()
     .setWorkerPoolSize(VERTX_WORKER_POOL_SIZE)
@@ -69,7 +73,19 @@ public class Main
         }
       });
 
-    DatabaseClient.initializeDatabase(vertx);
+    initializeDatabseAndUpdateCache(vertx)
+      .onComplete(ar ->
+      {
+          if (ar.succeeded())
+          {
+            LOGGER.info("Database initialized and polling data cache updated successfully.");
+          }
+          else
+          {
+            LOGGER.severe("Failed to initialize database or update polling data cache: " + ar.cause().getMessage());
+            ar.cause().printStackTrace();
+          }
+      });
 
     // Add a shutdown hook for graceful termination
     Runtime.getRuntime().addShutdownHook(new Thread(() ->
@@ -87,7 +103,6 @@ public class Main
         }
       });
     }));
-
   }
 
   // Hanlde deploy verticles sequencally
@@ -95,11 +110,11 @@ public class Main
   {
     return deployVerticle(Server.class.getName(), new DeploymentOptions().setInstances(SERVER_VERTICLE_INSTANCES))
 
-      .compose(v -> deployVerticle(DiscoveryVerticle.class.getName(), new DeploymentOptions().setInstances(DISCOVERY_VERTICLE_INSTANCES)))
+      .compose(v -> deployVerticle(Discovery.class.getName(), new DeploymentOptions().setInstances(DISCOVERY_VERTICLE_INSTANCES)))
 
-      .compose(v -> deployVerticle(ProvisionVerticle.class.getName(), new DeploymentOptions().setInstances(PROVISION_VERTICLE_INSTANCES)))
+      .compose(v -> deployVerticle(ObjectManager.class.getName(), new DeploymentOptions().setInstances(PROVISION_VERTICLE_INSTANCES)))
 
-      .compose(v -> deployVerticle(PollerVerticle.class.getName(), new DeploymentOptions().setInstances(POLLER_VERTICLE_INSTANCES).setThreadingModel(ThreadingModel.WORKER)
+      .compose(v -> deployVerticle(Poller.class.getName(), new DeploymentOptions().setInstances(POLLER_VERTICLE_INSTANCES).setThreadingModel(ThreadingModel.WORKER)
       ));
   }
 
@@ -119,5 +134,12 @@ public class Main
         }
       })
     );
+  }
+
+  // intializedatabase and Update Cache
+  public static Future<Object> initializeDatabseAndUpdateCache(Vertx vertx)
+  {
+    return DatabaseClient.initializeDatabase(vertx)
+      .compose(v -> Utils.updatePollingDataCache());
   }
 }

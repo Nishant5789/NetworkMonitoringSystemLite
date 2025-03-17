@@ -1,9 +1,10 @@
-package com.motadata.NMSLiteUsingVertex.routes;
+package com.motadata.NMSLiteUsingVertex.api;
 
 import com.motadata.NMSLiteUsingVertex.Main;
 import com.motadata.NMSLiteUsingVertex.database.QueryHandler;
 import com.motadata.NMSLiteUsingVertex.utils.AppLogger;
 import com.motadata.NMSLiteUsingVertex.utils.Utils;
+import io.vertx.core.Future;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
@@ -13,29 +14,30 @@ import java.util.logging.Logger;
 import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
 import static com.motadata.NMSLiteUsingVertex.utils.Utils.formatInvalidResponse;
 
-public class DiscoveryRouter
+public class Discovery
 {
-  private  static final Router router = Router.router(Main.vertx());
+    private static final Logger LOGGER = AppLogger.getLogger();
+//  private static final Logger LOGGER =  Logger.getLogger(Discovery.class.getName());
 
-  private static final Logger LOGGER = AppLogger.getLogger();
+  private static final Router router = Router.router(Main.vertx());
 
-  // return subrouter for discoveryRouter
+  // return subroutes for discovery
   public static Router getRouter()
   {
-    // POST /api/discovery
-    router.post("/").handler(DiscoveryRouter::addedDiscovery);
+    // POST /api/discovery - added discovery
+    router.post("/").handler(Discovery::addedDiscovery);
 
-    // GET /api/run/:discoveryId
-    router.get("/run/:discovery_id").handler(DiscoveryRouter::handleRunDiscovery);
+    // GET /api/run/ - run discovery
+    router.post("/run").handler(Discovery::handleRunDiscovery);
 
-    // DELETE /api/:discoveryId
-    router.delete("/:discovery_id").handler(DiscoveryRouter::deleteDiscovery);
+    // DELETE /api/:discoveryId - delete discovery
+    router.delete("/:discovery_id").handler(Discovery::deleteDiscovery);
 
     return router;
   }
 
-  // added discovery
-  private static void addedDiscovery(RoutingContext ctx)
+  // handle added discovery
+  public static void addedDiscovery(RoutingContext ctx)
   {
     var payload = ctx.body().asJsonObject();
 
@@ -64,20 +66,22 @@ public class DiscoveryRouter
       {
         LOGGER.severe("Failed to save discovery: " + err.getMessage());
 
-        var response = Utils.createResponse("error", "Failed to save discovery: " + err.getMessage());
+        var errResponse = Utils.createResponse("error", "Failed to save discovery: " + err.getMessage());
 
-        ctx.response().setStatusCode(500).end(response.encodePrettily());
+        ctx.response().setStatusCode(500).end(errResponse.encodePrettily());
       });
   }
 
-  // run discovery
-  private static void handleRunDiscovery(RoutingContext ctx)
+  // handle run discovery
+  public static void handleRunDiscovery(RoutingContext ctx)
   {
-    var id = ctx.pathParam(DISCOVERY_ID_HEADER_PATH);
+    var payload = ctx.body().asJsonObject();
 
-    if (id == null || id.trim().isEmpty())
+    var id = String.valueOf(payload.getInteger(DISCOVERY_ID_KEY));
+
+    if(id == null || id.trim().isEmpty())
     {
-      LOGGER.warning("Invalid discovery name received: " + id);
+      LOGGER.warning("Invalid discovery id received: " + id);
 
       var response = Utils.createResponse("failed", "Invalid discovery id: id cannot be empty");
 
@@ -86,33 +90,41 @@ public class DiscoveryRouter
     }
 
     QueryHandler.findById(DISCOVERY_TABLE, id)
-      .onSuccess(discoveryRecord->
+      .compose( discoveryRecord ->
       {
-        ctx.vertx().eventBus().request(DISCOVERY_EVENT, discoveryRecord,
-          reply->
-          {
-            if (reply.succeeded())
-            {
-              ctx.response().setStatusCode(200).end(((JsonObject) reply.result().body()).encodePrettily());
-            }
-            else
-            {
-              ctx.response().setStatusCode(500).end(new JsonObject().put("error", "Failed to start discovery").encodePrettily());
-            }
-          });
+        if(discoveryRecord.getString(DISCOVERY_STATUS_KEY).equals("pending"))
+        {
+          return ctx.vertx().eventBus().request(DISCOVERY_EVENT, discoveryRecord);
+        }
+        else
+        {
+          return Future.failedFuture("discovery is already completed");
+        }
       })
-      .onFailure((err)->
+      .compose(reply ->
       {
-        LOGGER.severe("Failed to find device: " + err.getMessage());
+        var updatePayload = new JsonObject().put(DISCOVERY_STATUS_KEY, "completed");
 
-        var response = Utils.createResponse("failed", "device is not found");
+        return QueryHandler.updateByField(DISCOVERY_TABLE, updatePayload, "discovery_id", id)
+          .map(v -> reply.body());
 
-        ctx.response().setStatusCode(500).end(response.encodePrettily());
+      })
+      .onSuccess(replyBody ->
+      {
+        var responce = Utils.createResponse("success", replyBody.toString());
+
+        ctx.response().setStatusCode(200).end(responce.encodePrettily());
+      })
+      .onFailure(err ->
+      {
+        var failedResponse = Utils.createResponse("failed", err.getMessage());
+
+        ctx.response().setStatusCode(400).end(failedResponse.encodePrettily());
       });
   }
 
-  // delete discovery
-  private static void deleteDiscovery(RoutingContext ctx)
+  // handle  delete discovery
+  public static void deleteDiscovery(RoutingContext ctx)
   {
     var discoveryId = ctx.pathParam(DISCOVERY_ID_HEADER_PATH);
 

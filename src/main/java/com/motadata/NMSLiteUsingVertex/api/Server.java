@@ -1,8 +1,5 @@
-package com.motadata.NMSLiteUsingVertex.services;
+package com.motadata.NMSLiteUsingVertex.api;
 
-import com.motadata.NMSLiteUsingVertex.routes.CredentialsRouter;
-import com.motadata.NMSLiteUsingVertex.routes.DiscoveryRouter;
-import com.motadata.NMSLiteUsingVertex.routes.ProvisionRouter;
 import com.motadata.NMSLiteUsingVertex.utils.AppLogger;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.ext.web.Router;
@@ -13,6 +10,7 @@ import java.util.logging.Logger;
 public class Server extends AbstractVerticle
 {
   private static final Logger LOGGER = AppLogger.getLogger();
+//  private static final Logger LOGGER =  Logger.getLogger(Server.class.getName());
 
   @Override
   public void start()
@@ -23,11 +21,13 @@ public class Server extends AbstractVerticle
 
     mainRouter.route().handler(BodyHandler.create());
 
-    mainRouter.route("/api/credentials/*").subRouter(CredentialsRouter.getRouter());
+    mainRouter.route("/api/credentials/*").subRouter(Credential.getRouter());
 
-    mainRouter.route("/api/discovery/*").subRouter(DiscoveryRouter.getRouter());
+    mainRouter.route("/api/discovery/*").subRouter(Discovery.getRouter());
 
-    mainRouter.route("/api/provision/*").subRouter(ProvisionRouter.getRouter());
+    mainRouter.route("/api/object/*").subRouter(Object.getRouter());
+
+    mainRouter.route("/api/monitor/*").subRouter(Monitor.getRouter());
 
     mainRouter.route("/").handler(ctx ->
     {

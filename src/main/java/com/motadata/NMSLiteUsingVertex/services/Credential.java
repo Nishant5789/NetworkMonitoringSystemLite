@@ -1,43 +1,24 @@
-package com.motadata.NMSLiteUsingVertex.routes;
+package com.motadata.NMSLiteUsingVertex.services;
 
-import com.motadata.NMSLiteUsingVertex.Main;
 import com.motadata.NMSLiteUsingVertex.database.QueryHandler;
 import com.motadata.NMSLiteUsingVertex.utils.AppLogger;
 import com.motadata.NMSLiteUsingVertex.utils.Utils;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
-import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 
 import java.util.logging.Logger;
 
 import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
+import static com.motadata.NMSLiteUsingVertex.utils.Constants.CREDENTIAL_TABLE;
 import static com.motadata.NMSLiteUsingVertex.utils.Utils.formatInvalidResponse;
 
-public class CredentialsRouter
+public class Credential
 {
-  private static final Logger LOGGER = AppLogger.getLogger();
+    private static final Logger LOGGER = AppLogger.getLogger();
+//  private static final Logger LOGGER =  Logger.getLogger(com.motadata.NMSLiteUsingVertex.api.Credential.class.getName());
 
-  private static final Router router = Router.router(Main.vertx());
-
-  public static Router getRouter()
-  {
-    router.post("/").handler(CredentialsRouter::saveCredential);
-
-    router.get("/").handler(CredentialsRouter::getAllCredentials);
-
-    router.get("/name/:name").handler(CredentialsRouter::findCredentialByName);
-
-    router.get("/:id").handler(CredentialsRouter::findCredentialById);
-
-    router.put("/:id").handler(CredentialsRouter::updateCredential);
-
-    router.delete("/:id").handler(CredentialsRouter::deleteCredential);
-
-    return router;
-  }
-
-  private static void saveCredential(RoutingContext ctx)
+  public static void saveCredential(RoutingContext ctx)
   {
     var payload = ctx.body().asJsonObject();
 
@@ -73,7 +54,7 @@ public class CredentialsRouter
       });
   }
 
-  private static void getAllCredentials(RoutingContext ctx)
+  public static void getAllCredentials(RoutingContext ctx)
   {
     LOGGER.info("Fetching all credentials");
 
@@ -96,52 +77,7 @@ public class CredentialsRouter
       });
   }
 
-  private static void findCredentialByName(RoutingContext ctx)
-  {
-    var name = ctx.pathParam(NAME_HEADER_PATH);
-
-    if (name == null || name.trim().isEmpty())
-    {
-      LOGGER.warning("Invalid credential name received: " + name);
-
-      var response = Utils.createResponse("failed", "Invalid credential name: Name cannot be empty");
-
-      ctx.response().setStatusCode(400).end(response.encodePrettily());
-
-      return;
-    }
-
-    LOGGER.info("Finding credential by name: " + name);
-
-    QueryHandler.getByfield(CREDENTIAL_TABLE, "name", name)
-      .onSuccess(credential ->
-      {
-        if (credential == null)
-        {
-          LOGGER.warning("Credential not found: " + name);
-
-          var response = Utils.createResponse("failed", "Credential not found");
-
-          ctx.response().setStatusCode(404).end(response.encodePrettily());
-        }
-        else
-        {
-          LOGGER.info("Found credential: " + credential);
-
-          ctx.response().end(credential.encodePrettily());
-        }
-      })
-      .onFailure(err ->
-      {
-        LOGGER.severe("Failed to find credential: " + err.getMessage());
-
-        var response = Utils.createResponse("failed", "Credential not found");
-
-        ctx.response().setStatusCode(500).end(response.encodePrettily());
-      });
-  }
-
-  private static void findCredentialById(RoutingContext ctx)
+  public static void findCredentialById(RoutingContext ctx)
   {
     var id = ctx.pathParam(ID_HEADER_PATH);
 
@@ -158,7 +94,7 @@ public class CredentialsRouter
 
     LOGGER.info("Finding credential by id: " + id);
 
-    QueryHandler.getByfield(CREDENTIAL_TABLE, "id", id)
+    QueryHandler.getByfield(CREDENTIAL_TABLE, "credential_id", id)
       .onSuccess(credential ->
       {
         if (credential == null)
@@ -186,7 +122,7 @@ public class CredentialsRouter
       });
   }
 
-  private static void updateCredential(RoutingContext ctx)
+  public static void updateCredential(RoutingContext ctx)
   {
     var id = ctx.pathParam(ID_HEADER_PATH);
 
@@ -202,20 +138,20 @@ public class CredentialsRouter
     }
 
     var payload = ctx.body().asJsonObject();
-    var payloadValidationResult = Utils.isValidPayload(CREDENTIAL_TABLE, payload);
 
-    if (payloadValidationResult.get("isValid").equals("false"))
+    if (payload == null || payload.isEmpty())
     {
-      var errorResponse = Utils.createResponse("error", formatInvalidResponse(payloadValidationResult));
+      LOGGER.warning("payload is empty");
 
-      ctx.response().setStatusCode(400).end(errorResponse.encodePrettily());
+      var response = Utils.createResponse("failed", "Invalid payload: payload is empty");
 
+      ctx.response().setStatusCode(400).end(response.encodePrettily());
       return;
     }
 
     LOGGER.info("Updating credential for id: " + id);
 
-    QueryHandler.updateByField(CREDENTIAL_TABLE, payload, "id", id)
+    QueryHandler.updateByField(CREDENTIAL_TABLE, payload, "credential_id", id)
       .onSuccess(v ->
       {
         LOGGER.info("Credential updated successfully for id: " + id);
@@ -234,7 +170,7 @@ public class CredentialsRouter
       });
   }
 
-  private static void deleteCredential(RoutingContext ctx)
+  public static void deleteCredential(RoutingContext ctx)
   {
     var credentialId = ctx.pathParam(ID_KEY);
     QueryHandler.deleteById(CREDENTIAL_TABLE, credentialId)
