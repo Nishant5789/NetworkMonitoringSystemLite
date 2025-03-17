@@ -139,7 +139,7 @@ Ensures synchronous message exchange while maintaining responsiveness.
 
 ### Prerequisites
 
-- Java 11+ (for Vert.x)
+- Java 17+ (for Vert.x)
 - Maven (for dependency management)
 - Go 1.18+ (for the plugin engine)
 - PostgreSQL 13+
