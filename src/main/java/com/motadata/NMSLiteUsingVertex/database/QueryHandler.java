@@ -1,16 +1,11 @@
 package com.motadata.NMSLiteUsingVertex.database;
 
-import com.motadata.NMSLiteUsingVertex.Main;
 import io.vertx.core.Future;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.sqlclient.Pool;
 import io.vertx.sqlclient.Row;
 import io.vertx.sqlclient.Tuple;
-import org.postgresql.util.PGobject;
-
-import java.time.OffsetDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -73,7 +68,8 @@ public class QueryHandler
         for (Row row : rows)
         {
           JsonObject obj = new JsonObject();
-          for (int i = 0; i < row.size(); i++) {
+          for (int i = 0; i < row.size(); i++)
+          {
             String column = row.getColumnName(i);
             Object value = row.getValue(i);
             obj.put(column, value);
@@ -85,7 +81,7 @@ public class QueryHandler
   }
 
   // Generalized SELECT BY CONDITION
-  public static Future<JsonObject> getByfield(String tableName, String fieldName, String fieldvalue)
+  public static Future<JsonObject> getByField(String tableName, String fieldName, String fieldvalue)
   {
     var condition = String.format("%s = '%s'",fieldName, fieldvalue);
 
@@ -112,43 +108,8 @@ public class QueryHandler
       });
   }
 
-  // Genralized SELECT ALL BY CONDITION
-  public static Future<JsonArray> getAllByfield(String tableName, String fieldName, String fieldvalue)
-  {
-    var condition = String.format("%s = '%s'",fieldName, fieldvalue);
-
-    var query = String.format("SELECT * FROM %s WHERE %s", tableName, condition);
-
-    return pool.preparedQuery(query)
-      .execute()
-      .map(rows ->
-      {
-        JsonArray jsonArray = new JsonArray();
-
-        if (rows.size() == 0) return null;
-
-        for (Row row : rows) {
-          JsonObject obj = new JsonObject();
-
-          for (int i = 0; i < row.size(); i++)
-          {
-            String column = row.getColumnName(i);
-            Object val = row.getValue(i);
-
-            if (val instanceof PGobject pgObject && "jsonb".equalsIgnoreCase(pgObject.getType()))
-            {
-              val = new JsonObject(pgObject.getValue());
-            }
-            obj.put(column, val);
-          }
-          jsonArray.add(obj);
-        }
-        return jsonArray;
-      });
-  }
-
-  // Find by ID
-  public static Future<JsonObject> findById(String tableName, String id)
+  // Generalized Find by ID
+  public static Future<JsonObject> getById(String tableName, String id)
   {
     String tableId = switch (tableName)
     {
@@ -157,10 +118,10 @@ public class QueryHandler
       case PROVISIONED_OBJECTS_TABLE -> OBJECT_ID_KEY;
       default -> ID_KEY;
     };
-    return getByfield(tableName, tableId, id);
+    return getByField(tableName, tableId, id);
   }
 
-  // Generalized UPDATE :find by  field & update
+  // Generalized UPDATE : find by field & update
   public static Future<Void> updateByField(String tableName, JsonObject payload, String fieldName, Object fieldvalue)
   {
     var condition = String.format("%s = '%s'",fieldName, fieldvalue);
@@ -204,7 +165,7 @@ public class QueryHandler
     {
       case CREDENTIAL_TABLE -> CREDENTIAL_ID_KEY;
       case DISCOVERY_TABLE -> DISCOVERY_ID_KEY;
-      case PROVISIONED_OBJECTS_TABLE -> MONITOR_ID_KEY;
+      case PROVISIONED_OBJECTS_TABLE -> OBJECT_ID_KEY;
       default -> ID_KEY;
     };
 

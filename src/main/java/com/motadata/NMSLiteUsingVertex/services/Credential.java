@@ -15,16 +15,16 @@ import static com.motadata.NMSLiteUsingVertex.utils.Utils.formatInvalidResponse;
 
 public class Credential
 {
-    private static final Logger LOGGER = AppLogger.getLogger();
-//  private static final Logger LOGGER =  Logger.getLogger(com.motadata.NMSLiteUsingVertex.api.Credential.class.getName());
+  private static final Logger LOGGER = AppLogger.getLogger();
 
+  // handle save credential
   public static void saveCredential(RoutingContext ctx)
   {
     var payload = ctx.body().asJsonObject();
 
     var payloadValidationResult = Utils.isValidPayload(CREDENTIAL_TABLE, payload);
 
-    if (payloadValidationResult.get("isValid").equals("false"))
+    if (payloadValidationResult.get(IS_VALID_KEY).equals("false"))
     {
       var errorResponse = Utils.createResponse("error", formatInvalidResponse(payloadValidationResult));
 
@@ -54,6 +54,7 @@ public class Credential
       });
   }
 
+  // handle send all credentials
   public static void getAllCredentials(RoutingContext ctx)
   {
     LOGGER.info("Fetching all credentials");
@@ -77,7 +78,8 @@ public class Credential
       });
   }
 
-  public static void findCredentialById(RoutingContext ctx)
+  // handle find credential by Id
+  public static void getCredentialById(RoutingContext ctx)
   {
     var id = ctx.pathParam(ID_HEADER_PATH);
 
@@ -94,7 +96,7 @@ public class Credential
 
     LOGGER.info("Finding credential by id: " + id);
 
-    QueryHandler.getByfield(CREDENTIAL_TABLE, "credential_id", id)
+    QueryHandler.getByField(CREDENTIAL_TABLE, "credential_id", id)
       .onSuccess(credential ->
       {
         if (credential == null)
@@ -122,6 +124,7 @@ public class Credential
       });
   }
 
+  // handle update credential
   public static void updateCredential(RoutingContext ctx)
   {
     var id = ctx.pathParam(ID_HEADER_PATH);
@@ -170,6 +173,7 @@ public class Credential
       });
   }
 
+  // handle delete credential
   public static void deleteCredential(RoutingContext ctx)
   {
     var credentialId = ctx.pathParam(ID_KEY);

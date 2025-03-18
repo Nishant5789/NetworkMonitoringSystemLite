@@ -16,8 +16,7 @@ import static com.motadata.NMSLiteUsingVertex.utils.Utils.formatInvalidResponse;
 
 public class Discovery
 {
-    private static final Logger LOGGER = AppLogger.getLogger();
-//  private static final Logger LOGGER =  Logger.getLogger(Discovery.class.getName());
+  private static final Logger LOGGER = AppLogger.getLogger();
 
   private static final Router router = Router.router(Main.vertx());
 
@@ -89,7 +88,7 @@ public class Discovery
       return;
     }
 
-    QueryHandler.findById(DISCOVERY_TABLE, id)
+    QueryHandler.getById(DISCOVERY_TABLE, id)
       .compose( discoveryRecord ->
       {
         if(discoveryRecord.getString(DISCOVERY_STATUS_KEY).equals("pending"))
@@ -105,7 +104,7 @@ public class Discovery
       {
         var updatePayload = new JsonObject().put(DISCOVERY_STATUS_KEY, "completed");
 
-        return QueryHandler.updateByField(DISCOVERY_TABLE, updatePayload, "discovery_id", id)
+        return QueryHandler.updateByField(DISCOVERY_TABLE, updatePayload, DISCOVERY_ID_KEY, id)
           .map(v -> reply.body());
 
       })
@@ -123,7 +122,7 @@ public class Discovery
       });
   }
 
-  // handle  delete discovery
+  // handle delete discovery
   public static void deleteDiscovery(RoutingContext ctx)
   {
     var discoveryId = ctx.pathParam(DISCOVERY_ID_HEADER_PATH);

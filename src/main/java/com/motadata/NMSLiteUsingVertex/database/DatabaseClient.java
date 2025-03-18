@@ -13,10 +13,10 @@ import java.util.logging.Logger;
 public class DatabaseClient
 {
   private static final Logger LOGGER = AppLogger.getLogger();
-//  private static final Logger LOGGER =  Logger.getLogger(DatabaseClient.class.getName());
 
   private static Pool pool;
 
+  // initialize database(check database exists if not then crate according to schema)
   public static Future<Void> initializeDatabase(Vertx vertx) {
     Promise<Void> promise = Promise.promise();
 
@@ -31,29 +31,29 @@ public class DatabaseClient
     pool = Pool.pool(vertx, connectOptions, poolOptions);
 
     // Check if database exists
-    String checkDbQuery = "SELECT 1 FROM pg_database WHERE datname = 'nms_lite_13'";
+    String checkDbQuery = "SELECT 1 FROM pg_database WHERE datname = 'nms_lite_15'";
 
     pool.query(checkDbQuery).execute(ar ->
     {
       if (ar.succeeded() && ar.result().size() > 0)
       {
-        LOGGER.info("Database nms_lite_13 already exists.");
+        LOGGER.info("Database nms_lite_15 already exists.");
         switchToNewDatabase(vertx).onComplete(promise); // ✅ Ensure switching
       }
       else
       {
-        LOGGER.info("Database nms_lite_13 does not exist, creating...");
+        LOGGER.info("Database nms_lite_15 does not exist, creating...");
 
-        pool.query("CREATE DATABASE nms_lite_13").execute(createAr ->
+        pool.query("CREATE DATABASE nms_lite_15").execute(createAr ->
         {
           if (createAr.succeeded())
           {
-            LOGGER.info("Database nms_lite_13 created successfully.");
+            LOGGER.info("Database nms_lite_15 created successfully.");
             switchToNewDatabase(vertx).onComplete(promise); // ✅ Only switch if created
           }
           else
           {
-            LOGGER.warning("Failed to create database nms_lite_13: " + createAr.cause().getMessage());
+            LOGGER.warning("Failed to create database nms_lite_15: " + createAr.cause().getMessage());
             promise.fail(createAr.cause()); // ✅ Fail if DB creation fails
           }
         });
@@ -63,6 +63,7 @@ public class DatabaseClient
     return promise.future();
   }
 
+  // create pool using database user credential
   private static Future<Void> switchToNewDatabase(Vertx vertx)
   {
     if (pool != null)
@@ -74,7 +75,7 @@ public class DatabaseClient
     PgConnectOptions newConnectOptions = new PgConnectOptions()
       .setPort(5432)
       .setHost("localhost")
-      .setDatabase("nms_lite_13")
+      .setDatabase("nms_lite_15")
       .setUser("postgres")
       .setPassword("1234");
 
@@ -84,6 +85,7 @@ public class DatabaseClient
     return createTables(); // ✅ Ensure table creation happens before resolving
   }
 
+  // create table according to schema
   private static Future<Void> createTables()
   {
     Promise<Void> promise = Promise.promise();
@@ -114,21 +116,21 @@ public class DatabaseClient
         -- Provisioned Objects Table
         CREATE TABLE IF NOT EXISTS provisioned_objects (
             object_id SERIAL PRIMARY KEY,
-            monitor_id INT UNIQUE,
             object_data JSONB NOT NULL,
-            provisioning_status VARCHAR(50) NOT NULL DEFAULT 'pending',
-            monitoring_status VARCHAR(50) DEFAULT 'Not applicable'
+            pollinterval INT,
+            lastpolltime BIGINT,
+            provisioning_status VARCHAR(50) NOT NULL DEFAULT 'pending'
         );
 
         -- Polling Table
         CREATE TABLE IF NOT EXISTS polling_results (
-            monitor_id INT NOT NULL,
+            object_id INT NOT NULL,
             timestamp BIGINT NOT NULL,
             counters JSONB NOT NULL,
-            PRIMARY KEY (monitor_id, timestamp),
+            PRIMARY KEY (object_id, timestamp),
 
             CONSTRAINT fk_polling_monitor
-                FOREIGN KEY (monitor_id) REFERENCES provisioned_objects(monitor_id)
+                FOREIGN KEY (object_id) REFERENCES provisioned_objects(object_id)
                 ON DELETE RESTRICT
         );
     """;
@@ -150,7 +152,7 @@ public class DatabaseClient
     return promise.future();
   }
 
-
+  // return postgres pool
   public static Pool getPool()
   {
     return pool;

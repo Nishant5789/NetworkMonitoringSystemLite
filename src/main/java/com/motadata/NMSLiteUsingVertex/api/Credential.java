@@ -17,7 +17,7 @@ public class Credential
     router.get("/").handler(com.motadata.NMSLiteUsingVertex.services.Credential::getAllCredentials);
 
     // GET /api/credentials/:id - get  credential by id
-    router.get("/:id").handler(com.motadata.NMSLiteUsingVertex.services.Credential::findCredentialById);
+    router.get("/:id").handler(com.motadata.NMSLiteUsingVertex.services.Credential::getCredentialById);
 
     // PUT /api/credentials/:id - update credential
     router.put("/:id").handler(com.motadata.NMSLiteUsingVertex.services.Credential::updateCredential);

@@ -23,8 +23,6 @@ public class ObjectManager extends AbstractVerticle
 {
   private static final Logger logger = AppLogger.getLogger();
 
-  public static final Queue<JsonObject> objectQueue = new ConcurrentLinkedQueue<>();
-
   @Override
   public void start(Promise<Void> startPromise) throws Exception
   {
@@ -32,6 +30,8 @@ public class ObjectManager extends AbstractVerticle
 
     vertx.eventBus().localConsumer(PROVISION_EVENT, this::provision);
 
+    // start object scheduling
+    handleObjectScheduling();
     startPromise.complete();
   }
 
@@ -42,9 +42,9 @@ public class ObjectManager extends AbstractVerticle
 
     var object_id = payload.getInteger(OBJECT_ID_KEY);
 
-    var  pollInterval = payload.getInteger(POLL_INTERVAL_KEY);
+    var pollInterval = payload.getInteger(POLL_INTERVAL_KEY);
 
-    QueryHandler.findById(PROVISIONED_OBJECTS_TABLE ,object_id.toString())
+    QueryHandler.getById(PROVISIONED_OBJECTS_TABLE ,object_id.toString())
       .onSuccess(provisionRecord->
       {
         if (provisionRecord == null)
@@ -55,63 +55,71 @@ public class ObjectManager extends AbstractVerticle
         }
 
         var objectId = provisionRecord.getInteger(OBJECT_ID_KEY);
-        var object = provisionRecord.getJsonObject("object_data").put(OBJECT_ID_KEY,objectId).put(MONITOR_ID_KEY,objectId);
+        var object = provisionRecord.getJsonObject("object_data").put(OBJECT_ID_KEY,objectId).put(LAST_POLL_TIME_KEY, System.currentTimeMillis()).put(POLL_INTERVAL_KEY, pollInterval);
 
-        objectQueue.add(object.put("lastPollTime", System.currentTimeMillis()));
+        Utils.addObjectInQueue(object);
+
+        QueryHandler.updateByField(PROVISIONED_OBJECTS_TABLE, new JsonObject().put(LAST_POLL_TIME_KEY, System.currentTimeMillis()).put(POLL_INTERVAL_KEY, pollInterval), OBJECT_ID_KEY, object.getInteger(OBJECT_ID_KEY))
+          .onComplete(result ->
+          {
+            if (result.succeeded())
+            {
+              logger.info("Update successful for Object ID: " + object.getInteger(OBJECT_ID_KEY));
+            }
+            else
+            {
+              logger.warning("Update failed: " + result.cause().getMessage());
+            }
+          });
 
         logger.info("Device's ip: " + object.getString(IP_KEY) + " added in objectQueue");
 
-        var provisionUpdatePayload = new JsonObject().put(PROVISIONING_STATUS_KEY,"active").put(MONITOR_ID_KEY,objectId).put(MONITORING_STATUS_KEY,MONITORING_STATUS_UP);
+        var provisionUpdatePayload = new JsonObject().put(PROVISIONING_STATUS_KEY,"active");
 
         QueryHandler.updateByField(PROVISIONED_OBJECTS_TABLE, provisionUpdatePayload, OBJECT_ID_KEY, objectId)
             .onSuccess(res->message.reply(Utils.createResponse("success", "Polling is started for provisioned device")))
             .onFailure(err->message.reply(err.getMessage()));
-
-        handleDeviceScheduling(pollInterval);
       })
-      .onFailure(err->
+      .onFailure(err ->
       {
         logger.warning("database query failed");
         message.reply(Utils.createResponse("error", err.getMessage()));
       });
   }
 
-  // schedule device polling
-  private void handleDeviceScheduling(int pollInterval)
+  // schedule object polling
+  private void handleObjectScheduling()
   {
-    Main.vertx().setTimer(5000,timeId->
+    Main.vertx().setPeriodic(5000,timeId->
     {
-      logger.info("Polling is started, objectQueue: " + objectQueue);
+      logger.info("Polling is started, objectQueue: " + Utils.getObjectQueue());
 
       var currentTime = System.currentTimeMillis();
 
-      var devicesToPoll = new JsonArray();
+      var objectToPoll = new JsonArray();
 
-      for (JsonObject object : objectQueue)
+      for (JsonObject object : Utils.getObjectQueue())
       {
         var lastPollTime = object.getLong(LAST_POLL_TIME_KEY);
 
         var timeSinceLastPoll = currentTime - lastPollTime;
 
-        if (timeSinceLastPoll >= pollInterval)
+        if (timeSinceLastPoll >= object.getInteger(POLL_INTERVAL_KEY))
         {
-          // Update last poll time
-          object.put("lastPollTime", currentTime);
+          objectToPoll.add(object);
 
-          devicesToPoll.add(object);
+          logger.info("Object sent for polling: " + objectToPoll.encodePrettily());
 
-          logger.info("Devices sent for polling: " + devicesToPoll.encodePrettily());
-
-          handleDevicePolling(devicesToPoll);
+          handleDevicePolling(objectToPoll);
         }
       }
     });
   }
 
   // handle device polling
-  private void handleDevicePolling(JsonArray devicesToPoll)
+  private void handleDevicePolling(JsonArray objectToPoll)
   {
-    Main.vertx().eventBus().request(POLLING_EVENT, devicesToPoll, result->
+    Main.vertx().eventBus().request(POLLING_EVENT, objectToPoll, result->
     {
       if(result.succeeded())
       {

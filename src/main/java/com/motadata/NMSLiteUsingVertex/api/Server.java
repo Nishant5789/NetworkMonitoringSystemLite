@@ -10,7 +10,6 @@ import java.util.logging.Logger;
 public class Server extends AbstractVerticle
 {
   private static final Logger LOGGER = AppLogger.getLogger();
-//  private static final Logger LOGGER =  Logger.getLogger(Server.class.getName());
 
   @Override
   public void start()
@@ -26,8 +25,6 @@ public class Server extends AbstractVerticle
     mainRouter.route("/api/discovery/*").subRouter(Discovery.getRouter());
 
     mainRouter.route("/api/object/*").subRouter(Object.getRouter());
-
-    mainRouter.route("/api/monitor/*").subRouter(Monitor.getRouter());
 
     mainRouter.route("/").handler(ctx ->
     {

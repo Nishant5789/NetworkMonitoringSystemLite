@@ -9,7 +9,6 @@ import com.motadata.NMSLiteUsingVertex.utils.AppLogger;
 import com.motadata.NMSLiteUsingVertex.utils.Utils;
 import io.vertx.core.DeploymentOptions;
 import io.vertx.core.Future;
-import io.vertx.core.ThreadingModel;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
 import io.vertx.core.eventbus.EventBusOptions;
@@ -24,7 +23,7 @@ public class Main
 
   private static final int POLLER_VERTICLE_INSTANCES = 1;
 
-  private static final int PROVISION_VERTICLE_INSTANCES = 1;
+  private static final int OBJECT_VERTICLE_INSTANCES = 1;
 
   private static final int VERTX_WORKER_POOL_SIZE = 20;
 
@@ -36,8 +35,6 @@ public class Main
 
   private static final int EVENT_BUS_RECONNECT_INTERVAL = 10000;
 
-//  private static final Logger LOGGER =  AppLogger.getLogger();
-
   private static final Logger LOGGER =  Logger.getLogger(Main.class.getName());
 
   private static final Vertx vertx = Vertx.vertx( new VertxOptions()
@@ -47,8 +44,7 @@ public class Main
         .setConnectTimeout(EVENT_BUS_CONNECTION_TIMEOUT)
         .setIdleTimeout(EVENT_BUS_IDLE_TIMEOUT)
         .setReconnectAttempts(EVENT_BUS_RECONNECT_ATTEMPTS)
-        .setReconnectInterval(EVENT_BUS_RECONNECT_INTERVAL)
-    )
+        .setReconnectInterval(EVENT_BUS_RECONNECT_INTERVAL))
   );
 
   // return vertex instance
@@ -73,6 +69,7 @@ public class Main
         }
       });
 
+    // initializeDatabase and Update objectQueue & poll dataCache
     initializeDatabseAndUpdateCache(vertx)
       .onComplete(ar ->
       {
@@ -105,20 +102,19 @@ public class Main
     }));
   }
 
-  // Hanlde deploy verticles sequencally
+  // deploy verticals sequentially
   private static Future<Void> deployVerticles()
   {
     return deployVerticle(Server.class.getName(), new DeploymentOptions().setInstances(SERVER_VERTICLE_INSTANCES))
 
       .compose(v -> deployVerticle(Discovery.class.getName(), new DeploymentOptions().setInstances(DISCOVERY_VERTICLE_INSTANCES)))
 
-      .compose(v -> deployVerticle(ObjectManager.class.getName(), new DeploymentOptions().setInstances(PROVISION_VERTICLE_INSTANCES)))
+      .compose(v -> deployVerticle(Poller.class.getName(), new DeploymentOptions().setInstances(POLLER_VERTICLE_INSTANCES)))
 
-      .compose(v -> deployVerticle(Poller.class.getName(), new DeploymentOptions().setInstances(POLLER_VERTICLE_INSTANCES).setThreadingModel(ThreadingModel.WORKER)
-      ));
+      .compose(v -> deployVerticle(ObjectManager.class.getName(), new DeploymentOptions().setInstances(OBJECT_VERTICLE_INSTANCES)));
   }
 
-  // deploy verticle by classname & deploymentoptions
+  // handle deploy vertical by class name & deployment options
   private static Future<Void> deployVerticle(String className, DeploymentOptions options)
   {
     return Future.future(promise ->
@@ -136,10 +132,11 @@ public class Main
     );
   }
 
-  // intializedatabase and Update Cache
+  // handle initializeDatabase And UpdateCache
   public static Future<Object> initializeDatabseAndUpdateCache(Vertx vertx)
   {
     return DatabaseClient.initializeDatabase(vertx)
-      .compose(v -> Utils.updatePollingDataCache());
+      .compose(v -> Utils.updateObjectQueueFromDatabase())
+      .compose(v-> Utils.updatePollingDataCacheFromDatabase());
   }
 }

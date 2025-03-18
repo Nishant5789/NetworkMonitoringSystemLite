@@ -23,7 +23,6 @@ import static com.motadata.NMSLiteUsingVertex.utils.Utils.formatInvalidResponse;
 public class Discovery extends AbstractVerticle
 {
   private static final Logger LOGGER = AppLogger.getLogger();
-//  private static final Logger LOGGER =  Logger.getLogger(Discovery.class.getName());
 
   @Override
   public void start()
@@ -41,13 +40,13 @@ public class Discovery extends AbstractVerticle
     var credentialId = payload.getString(CREDENTIAL_ID_KEY);
     var ips =  payload.getString(IPS_KEY);
     var port = String.valueOf(payload.getInteger(PORT_KEY));
-    var deviceType = payload.getString(DEVICE_TYPE_KEY);
+    var deviceType = payload.getString(OBJECT_TYPE_KEY);
 
     List<Future> allFutures = new ArrayList<>();
 
-    for (Object ipObject : new JsonArray(ips))
+    for (Object ipObj : new JsonArray(ips))
     {
-      var ip = (String) ipObject;
+      var ip = (String) ipObj;
 
       Future<Void> future = Utils.checkDeviceAvailability(ip, port)
         .compose(flag ->
@@ -56,7 +55,7 @@ public class Discovery extends AbstractVerticle
           {
             return Future.failedFuture("object is not available");
           }
-          return QueryHandler.findById(CREDENTIAL_TABLE, credentialId);
+          return QueryHandler.getById(CREDENTIAL_TABLE, credentialId);
         })
         .compose(credential ->
         {
@@ -75,7 +74,7 @@ public class Discovery extends AbstractVerticle
 
           return vertx.executeBlocking(promise ->
             checkDiscovery(discoveryPayload)
-              .onSuccess(responce->
+              .onSuccess(responce ->
               {
                 discoveryPayload.remove(EVENT_NAME_KEY);
                 promise.complete(discoveryPayload);

@@ -11,9 +11,8 @@ import io.vertx.core.json.impl.JsonUtil;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
@@ -24,11 +23,12 @@ import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
 public class Utils
 {
   private static final Logger LOGGER = AppLogger.getLogger();
-//  private static final Logger LOGGER =  Logger.getLogger(Utils.class.getName());
 
   private static final List<JsonObject> pollingDataCache = new CopyOnWriteArrayList<>();
 
-  // create send responceObject
+  private static final Queue<JsonObject> objectQueue = new ConcurrentLinkedQueue<>();
+
+  // create send responseObject
   public static JsonObject createResponse(String status, String statusMsg)
   {
     return new JsonObject()
@@ -36,7 +36,7 @@ public class Utils
       .put("statusMsg", statusMsg);
   }
 
-  // check ping command is successful or not
+  // check ping is successful or not
   public static Future<Boolean> ping(String ip)
   {
     return Main.vertx().executeBlocking(() ->
@@ -125,8 +125,59 @@ public class Utils
     }
   }
 
-  // update pollingDataCache
-  public static Future<Object> updatePollingDataCache()
+  // update objectqueue from database
+  public static Future<Object> updateObjectQueueFromDatabase()
+  {
+    return QueryHandler.getAll("provisioned_objects")
+      .onSuccess(result ->
+      {
+        objectQueue.clear(); // Clear the existing queue before updating
+        for (JsonObject obj : result)
+        {
+          JsonObject filteredObject = new JsonObject()
+            .put(IP_KEY, obj.getJsonObject("object_data").getString(IP_KEY))
+            .put(PORT_KEY, obj.getJsonObject("object_data").getString(PORT_KEY))
+            .put(PASSWORD_KEY, obj.getJsonObject("object_data").getString(PASSWORD_KEY))
+            .put(USERNAME_KEY, obj.getJsonObject("object_data").getString(USERNAME_KEY))
+            .put(PLUGIN_ENGINE_TYPE_KEY, obj.getJsonObject("object_data").getString(PLUGIN_ENGINE_TYPE_KEY))
+            .put(OBJECT_ID_KEY, obj.getInteger(OBJECT_ID_KEY))
+            .put(LAST_POLL_TIME_KEY, obj.getLong(LAST_POLL_TIME_KEY))
+            .put(POLL_INTERVAL_KEY, obj.getInteger(POLL_INTERVAL_KEY));
+
+          objectQueue.add(filteredObject);
+        }
+        LOGGER.severe("Object queue updated successfully: " + objectQueue);
+      })
+      .mapEmpty()
+      .onFailure(err ->
+      {
+        LOGGER.severe("Failed to update object queue: " + err.getMessage());
+      });
+  }
+
+  // add objectwithdata in objectqueue
+  public static void addObjectInQueue(JsonObject obj)
+  {
+    objectQueue.add(obj);
+  }
+
+  // return objectQueue
+  public static Queue<JsonObject> getObjectQueue()
+  {
+    return objectQueue;
+  }
+
+  // handle update lastpolltime in objectqueue
+  public static void updateObjectLastPollTimeInObjectQueue(int objectId, Long lastPollTIME)
+  {
+    objectQueue.stream()
+      .filter(obj -> obj.getInteger(OBJECT_ID_KEY) == objectId)
+      .findFirst()
+      .ifPresent(obj -> obj.put(LAST_POLL_TIME_KEY, lastPollTIME));
+  }
+
+  // update pollingDataCache from database
+  public static Future<Object> updatePollingDataCacheFromDatabase()
   {
     LOGGER.info("updatePollingDataCache() called");
 
@@ -155,13 +206,13 @@ public class Utils
       });
   }
 
-  // get CounterObject from cache
+  // get CounterObject from pollingdataCache
   public static JsonArray getPollDataFromCache(String objectId)
   {
     JsonArray resultArray = new JsonArray();
 
     pollingDataCache.stream()
-      .filter(obj -> objectId.equals(obj.getString(MONITOR_ID_KEY)))
+      .filter(obj -> objectId.equals(obj.getString(OBJECT_ID_KEY)))
       .forEach(resultArray::add);
 
     return resultArray;
@@ -176,12 +227,13 @@ public class Utils
       return;
     }
 
+    // added polling responce in PollingdataCache
     pollingDataCache.add(pollResponsePayload);
 
     LOGGER.info("Added polling response to pollingDataCache: " + pollResponsePayload.encode());
   }
 
-  // valiaat payload
+  // validate payload
   public static Map<String, String> isValidPayload(String tableName, JsonObject payload)
   {
     Map<String, String> response;
@@ -195,7 +247,7 @@ public class Utils
         response = validateDiscoveryPayload(payload);
         break;
       case PROVISIONED_OBJECTS_TABLE:
-        response = validateProvisionPayload(payload);
+        response = validateProvisionObjectPayload(payload);
         break;
 
       default:
@@ -219,47 +271,47 @@ public class Utils
       return response;
     }
 
-    if (!payload.containsKey("ips") || !(payload.getValue("ips") instanceof JsonArray) || payload.getJsonArray("ips").isEmpty())
+    if (!payload.containsKey(IPS_KEY) || !(payload.getValue(IPS_KEY) instanceof JsonArray) || payload.getJsonArray(IPS_KEY).isEmpty())
     {
       response.put(IS_VALID_KEY, "false");
-      response.put("ipsError", "Invalid or missing 'IP' address");
+      response.put(IPS_ERROR, "Invalid or missing 'IP' address");
     }
-    else if (!isValidIPSAddress(payload.getJsonArray("ips")))
+    else if (!isValidIPSAddress(payload.getJsonArray(IPS_KEY)))
     {
       response.put(IS_VALID_KEY, "false");
-      response.put("ipsError", "IP address format is invalid");
+      response.put(IPS_ERROR, "IP address format is invalid");
     }
 
     if (!payload.containsKey("port") || !(payload.getValue("port") instanceof Integer))
     {
       response.put(IS_VALID_KEY, "false");
-      response.put("portError", "Invalid or missing 'port'");
+      response.put(PORT_ERROR, "Invalid or missing 'port'");
     }
     else if (payload.getInteger("port") < 0 || payload.getInteger("port") > 65535)
     {
       response.put(IS_VALID_KEY, "false");
-      response.put("portError", "Port must be between 0 and 65535");
+      response.put(PORT_ERROR, "Port must be between 0 and 65535");
     }
 
-    if (!payload.containsKey("type") || !(payload.getValue("type") instanceof String) || payload.getString("type").trim().isEmpty())
+    if (!payload.containsKey(OBJECT_TYPE_KEY) || !(payload.getValue(OBJECT_TYPE_KEY) instanceof String) || payload.getString(OBJECT_TYPE_KEY).trim().isEmpty())
     {
       response.put(IS_VALID_KEY, "false");
-      response.put("typeError", "Invalid or missing 'type'");
+      response.put(TYPE_ERROR, "Invalid or missing 'type'");
     }
     else
     {
-      String type = payload.getString("type").trim().toLowerCase();
+      String type = payload.getString(OBJECT_TYPE_KEY).trim().toLowerCase();
       if (!type.equals("linux") && !type.equals("windows") && !type.equals("snmp"))
       {
         response.put(IS_VALID_KEY, "false");
-        response.put("typeError", "Type must be one of: 'linux', 'windows', or 'snmp'");
+        response.put(TYPE_ERROR, "Type must be one of: 'linux', 'windows', or 'snmp'");
       }
     }
 
-    if (!payload.containsKey("credential_id") || !(payload.getValue("credential_id") instanceof Integer))
+    if (!payload.containsKey(CREDENTIAL_ID_KEY) || !(payload.getValue(CREDENTIAL_ID_KEY) instanceof Integer))
     {
       response.put(IS_VALID_KEY, "false");
-      response.put("credentialIdError", "Invalid or missing 'credential_id'");
+      response.put(CREDENTIAL_ID_ERROR, "Invalid or missing 'credential_id'");
     }
 
     return response;
@@ -278,22 +330,22 @@ public class Utils
       return response;
     }
 
-    if (!(payload.containsKey("username") && payload.getValue("username") instanceof String && !payload.getString("username").trim().isEmpty()))
+    if (!(payload.containsKey(USERNAME_KEY) && payload.getValue(USERNAME_KEY) instanceof String && !payload.getString(USERNAME_KEY).trim().isEmpty()))
     {
       response.put(IS_VALID_KEY, "false");
-      response.put("usernameError", "Invalid or missing 'username'");
+      response.put(USERNAME_ERROR, "Invalid or missing 'username'");
     }
-    if (!(payload.containsKey("password") && payload.getValue("password") instanceof String && !payload.getString("password").trim().isEmpty()))
+    if (!(payload.containsKey(PASSWORD_KEY) && payload.getValue(PASSWORD_KEY) instanceof String && !payload.getString(PASSWORD_KEY).trim().isEmpty()))
     {
       response.put(IS_VALID_KEY, "false");
-      response.put("passwordError", "Invalid or missing 'password'");
+      response.put(PASSWORD_ERROR, "Invalid or missing 'password'");
     }
 
     return response;
   }
 
   // validate provision payload
-  private static Map<String, String> validateProvisionPayload(JsonObject payload)
+  private static Map<String, String> validateProvisionObjectPayload(JsonObject payload)
   {
     Map<String, String> response = new HashMap<>();
     response.put(IS_VALID_KEY, "true");
@@ -311,29 +363,28 @@ public class Utils
       response.put("objectIdError", "Invalid or missing 'discovery_id'");
     }
 
-    if (!payload.containsKey("pollInterval") || !(payload.getValue("pollInterval") instanceof Integer))
+    if (!payload.containsKey(POLL_INTERVAL_KEY) || !(payload.getValue(POLL_INTERVAL_KEY) instanceof Integer))
     {
       response.put(IS_VALID_KEY, "false");
-      response.put("pollIntervalError", "Invalid or missing 'pollInterval'");
+      response.put(POLLINTERVAL_ERROR, "Invalid or missing 'pollInterval'");
     }
     else
     {
       try
       {
-        int pollInterval = payload.getInteger("pollInterval");
+        int pollInterval = payload.getInteger(POLL_INTERVAL_KEY);
         if (pollInterval <= 0)
         {
           response.put(IS_VALID_KEY, "false");
-          response.put("pollIntervalError", "'pollInterval' must be a positive number");
+          response.put(POLLINTERVAL_ERROR, "'pollInterval' must be a positive number");
         }
       }
       catch (NumberFormatException e)
       {
         response.put(IS_VALID_KEY, "false");
-        response.put("pollIntervalError", "'pollInterval' must be a numeric string");
+        response.put(POLLINTERVAL_ERROR, "'pollInterval' must be a numeric string");
       }
     }
-
     return response;
   }
 
@@ -342,50 +393,23 @@ public class Utils
   {
     var ipRegex = "^((25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)$";
 
-    for (int i = 0; i < ips.size(); i++) {
+    for (int i = 0; i < ips.size(); i++)
+    {
       String ip = ips.getString(i);
-      if (!Pattern.compile(ipRegex).matcher(ip).matches()) {
+      if (!Pattern.compile(ipRegex).matcher(ip).matches())
+      {
         return false;
       }
     }
     return true;
   }
 
+  // format invalid response and return response
   public static String formatInvalidResponse(Map<String, String> response)
   {
     return response.entrySet().stream()
       .filter(entry -> !entry.getKey().equals(IS_VALID_KEY))
       .map(entry -> entry.getKey() + ": " + entry.getValue())
       .collect(Collectors.joining(", "));
-  }
-
-  public static String windowsPollDataKeyFormatter(String key)
-  {
-    StringBuilder result = new StringBuilder();
-    result.append(Character.toLowerCase(key.charAt(0)));
-
-    for (int i = 1; i < key.length(); i++)
-    {
-      char ch = key.charAt(i);
-      if (Character.isUpperCase(ch))
-      {
-        result.append('_').append(Character.toLowerCase(ch));
-      }
-      else
-      {
-        result.append(ch);
-      }
-    }
-    return result.toString();
-  }
-
-  public static JsonObject formatWindowsPlugineEnginePayload(String ip, String username, String password)
-  {
-    return new JsonObject()
-      .put("ip", ip)
-      .put("username", username)
-      .put("password", password)
-      .put("requestType", "provisioning")
-      .put("systemType", "windows");
   }
 }
