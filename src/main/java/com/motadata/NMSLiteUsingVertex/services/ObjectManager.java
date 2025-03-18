@@ -59,7 +59,9 @@ public class ObjectManager extends AbstractVerticle
 
         Utils.addObjectInQueue(object);
 
-        QueryHandler.updateByField(PROVISIONED_OBJECTS_TABLE, new JsonObject().put(LAST_POLL_TIME_KEY, System.currentTimeMillis()).put(POLL_INTERVAL_KEY, pollInterval), OBJECT_ID_KEY, object.getInteger(OBJECT_ID_KEY))
+        var updatePayload = new JsonObject().put(LAST_POLL_TIME_KEY, System.currentTimeMillis()).put(POLL_INTERVAL_KEY, pollInterval);
+
+        QueryHandler.updateByField(PROVISIONED_OBJECTS_TABLE, updatePayload, OBJECT_ID_KEY, objectId)
           .onComplete(result ->
           {
             if (result.succeeded())
@@ -90,7 +92,7 @@ public class ObjectManager extends AbstractVerticle
   // schedule object polling
   private void handleObjectScheduling()
   {
-    Main.vertx().setPeriodic(5000,timeId->
+    Main.vertx().setTimer(5000,timeId ->
     {
       logger.info("Polling is started, objectQueue: " + Utils.getObjectQueue());
 

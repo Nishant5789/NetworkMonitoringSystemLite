@@ -30,6 +30,8 @@ public class Constants
 
   public static final String ID_KEY = "id";
 
+  public static final String REQUEST_ID = "request_id";
+
   public static final String CREDENTIAL_ID_KEY = "credential_id";
 
   public static final String DISCOVERY_ID_KEY = "discovery_id";

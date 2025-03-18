@@ -11,6 +11,7 @@ import io.vertx.core.eventbus.Message;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.RoutingContext;
+import org.zeromq.SocketType;
 import org.zeromq.ZMQ;
 
 import java.util.ArrayList;
@@ -113,7 +114,7 @@ public class Discovery extends AbstractVerticle
   {
     try
     {
-      ZMQ.Socket socket = new ZMQConfig().getSocket();
+      ZMQ.Socket socket = ZMQConfig.getReqSocket();
 
       LOGGER.info("Sending request: " + requestJson.toString());
 

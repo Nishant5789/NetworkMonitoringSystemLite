@@ -6,30 +6,26 @@ import static com.motadata.NMSLiteUsingVertex.utils.Constants.ZMQ_ADDRESS;
 
 public class ZMQConfig
 {
-  private final ZMQ.Context context;
-
-  private final ZMQ.Socket socket;
-
-  // update zmq configuration
-  public ZMQConfig()
-  {
-    this.context = ZMQ.context(1);
-
-    this.socket = context.socket(ZMQ.REQ);
-
-    socket.connect(ZMQ_ADDRESS);
-  }
-
   // return socket instance
-  public ZMQ.Socket getSocket()
+  public static ZMQ.Socket getDealerSocket()
   {
+    var context = ZMQ.context(1);
+    var socket = context.socket(ZMQ.DEALER);
+
+    socket.setReceiveTimeOut(0);
+    socket.setHWM(0);
+    socket.connect(ZMQ_ADDRESS);
+
     return socket;
   }
 
-  public void close()
+  public static ZMQ.Socket getReqSocket()
   {
-    socket.close();
+    var context = ZMQ.context(1);
+    var socket = context.socket(ZMQ.REQ);
 
-    context.term();
+    socket.connect(ZMQ_ADDRESS);
+
+    return socket;
   }
 }
