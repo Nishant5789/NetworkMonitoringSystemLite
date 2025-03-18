@@ -1,14 +1,9 @@
-Below is a `README.md` file tailored for your network monitoring system based on the details you've shared. It reflects your current implementation (Vert.x framework, PostgreSQL database, ZeroMQ server for communication, and a Go-based Linux plugin engine) and outlines features like credential management, discovery, provisioning, and polling data. I've also included placeholders for future expansions (Windows and SNMP devices).
-
----
-
-# Network Monitoring System
-
-Welcome to the **Network Monitoring System**, a robust solution designed to monitor network devices efficiently. This system leverages modern technologies to provide real-time insights into device performance and status. Currently, it supports monitoring Linux devices, with plans to extend support to Windows devices and SNMP-enabled devices in the future.
+Welcome to the Network Monitoring System, a robust solution designed to monitor network devices efficiently. This system leverages modern technologies to provide real-time insights into device performance and status. Currently, it supports monitoring Linux devices, with plans to extend support to Windows devices and SNMP-enabled devices in the future.
 
 ## Overview
 
 The system is built with a modular architecture, integrating the following core components:
+
 - **Vert.x Framework**: A reactive toolkit for building scalable, event-driven applications in Java.
 - **PostgreSQL Database**: A reliable, open-source relational database for storing monitoring data and device configurations.
 - **ZeroMQ (ZMQ)**: A high-performance messaging library facilitating communication between the Java-based core system and the Go-based plugin engine.
@@ -16,102 +11,412 @@ The system is built with a modular architecture, integrating the following core 
 
 ## Features
 
-### 1. Credential Management
-- **Purpose**: Securely manage credentials for accessing monitored devices.
-- **Implementation**: 
-  - Device credentials (username, password) are stored in PostgreSQL with encryption (future enhancement).
-  - Passed securely via JSON payloads to the Go plugin engine through ZeroMQ.
-- **Usage**: Credentials are included in requests for discovery and polling operations.
+- **Credential Management**: Securely store and manage device credentials.
+- **Device Discovery**: Automatically discover devices within the network.
+- **Provisioning & Monitoring**: Enable real-time network monitoring and provisioning.
+- **Polling & Status Updates**: Retrieve up-to-date network statistics.
+- **Availability Checks**: Monitor network availability seamlessly.
 
-### 2. Device Discovery
-- **Purpose**: Automatically detect and identify Linux devices on the network.
-- **Implementation**:
-  - The Go plugin engine performs discovery using SSH (via host, port, username, and password).
-  - Returns discovery status (`success` or `failed`) and a status message.
-- **Request Format**:
+## Database Schema
+
+### Credential Table
+```sql
+CREATE TABLE credential (
+    credential_id SERIAL PRIMARY KEY,
+    username VARCHAR(255) NOT NULL,
+    password VARCHAR(255) NOT NULL
+);
+```
+
+### Discovery Table
+```sql
+CREATE TABLE discovery (
+    discovery_id SERIAL PRIMARY KEY,
+    credential_id INT NOT NULL,
+    ips JSONB NOT NULL,
+    port INTEGER NOT NULL CHECK (port BETWEEN 0 AND 65535),
+    type VARCHAR NOT NULL CHECK (type IN ('linux', 'windows', 'snmp')),
+    discovery_status VARCHAR(50) NOT NULL DEFAULT 'pending' 
+    CHECK (discovery_status IN ('pending', 'completed')),
+
+    CONSTRAINT fk_discovery_credential 
+        FOREIGN KEY (credential_id) REFERENCES credential(credential_id) 
+        ON DELETE RESTRICT
+);
+```
+
+### Provisioning Table
+```sql
+CREATE TABLE provisioned_objects (
+    monitor_id INT,
+    object_id INT NOT NULL,         -- Reference to the discovered object (device)
+    object_data JSONB NOT NULL,     -- Stores metadata about the object
+    provisioning_status VARCHAR(50) NOT NULL DEFAULT 'pending',  -- Status: pending, active, failed, completed
+    monitor_status VARCHAR(50) DEFAULT 'Not applicable',  -- Status: up, down
+    PRIMARY KEY (object_id)
+);
+```
+
+### Polling Table
+```sql
+CREATE TABLE polling_results (
+    monitor_id INT NOT NULL,
+    timestamp INT NOT NULL,
+    counters JSONB NOT NULL,
+    PRIMARY KEY (monitor_id, timestamp),
+    CONSTRAINT fk_polling_monitor 
+        FOREIGN KEY (monitor_id) REFERENCES provisioning(monitor_id) 
+        ON DELETE CASCADE
+);
+```
+Here is the updated API documentation with **response examples** included where applicable. Since the original JSON did not provide specific response structures, I have added generic examples based on typical API responses. You can replace these with actual responses from your API when available.
+
+---
+
+## API Documentation for NMS Lite Project
+
+### Base URL
+`http://localhost:8080/api/`
+
+---
+
+## 1. Credentials
+
+### 1.1 Get All Credentials
+- **Endpoint**: `/credentials/`
+- **Method**: `GET`
+- **Description**: Retrieves all credentials.
+- **Request**: No payload required.
+- **Response Example**:
+  ```json
+  [
+      {
+          "id": 1,
+          "name": "nishant12345",
+          "username": "nishant",
+          "password": "Nish@321"
+      },
+      {
+          "id": 2,
+          "name": "admin",
+          "username": "admin",
+          "password": "Admin@123"
+      }
+  ]
+  ```
+
+---
+
+### 1.2 Save Credentials
+- **Endpoint**: `/credentials/`
+- **Method**: `POST`
+- **Description**: Saves new credentials.
+- **Request Payload**:
   ```json
   {
-    "pluginEngine": "linux",
-    "eventName": "discovery",
-    "username": "user",
-    "password": "pass",
-    "host": "localhost",
-    "port": 22
+      "name": "nishant12345",
+      "username": "nishant",
+      "password": "Nish@321"
   }
   ```
-- **Response Format**:
+- **Response Example**:
   ```json
   {
-    "status": "success",
-    "statusMsg": "Device discovered"
+      "id": 3,
+      "name": "nishant12345",
+      "username": "nishant",
+      "password": "Nish@321"
   }
   ```
 
-### 3. Device Provisioning
-- **Purpose**: Register and configure devices in the system for monitoring.
-- **Implementation**:
-  - Devices discovered are stored in PostgreSQL with details like device ID, host, port, and credentials.
-  - Managed via Vert.x event bus messages to initiate provisioning workflows.
-- **Future Enhancement**: Automate provisioning after discovery with user approval.
+---
 
-### 4. Polling Data
-- **Purpose**: Collect performance metrics from monitored Linux devices.
-- **Implementation**:
-  - The Go plugin engine uses SSH to gather metrics (e.g., CPU, memory, disk usage) from Linux devices.
-  - Data is sent back as a JSON string and stored in PostgreSQL tables (`linuxCounterResult` and `pollerResult`).
-- **Request Format**:
+### 1.3 Get Credentials by ID
+- **Endpoint**: `/credentials/{id}`
+- **Method**: `GET`
+- **Description**: Retrieves credentials by ID.
+- **Request**: No payload required.
+- **Response Example**:
   ```json
   {
-    "pluginEngine": "linux",
-    "eventName": "polling",
-    "username": "user",
-    "password": "pass",
-    "host": "localhost",
-    "port": 22
+      "id": 1,
+      "name": "nishant12345",
+      "username": "nishant",
+      "password": "Nish@321"
   }
   ```
-- **Response Format** (example):
+
+---
+
+### 1.4 Update Credentials by ID
+- **Endpoint**: `/credentials/{id}`
+- **Method**: `PUT`
+- **Description**: Updates credentials by ID.
+- **Request Payload**:
   ```json
   {
-    "status": "success",
-    "statusMsg": "Data collected",
-    "metrics": [
-      {"name": "cpu_usage", "value": "25%"},
-      {"name": "memory_usage", "value": "1.2GB"}
-    ]
+      "name": "nishant4",
+      "username": "nishant567",
+      "password": "Nish@321"
   }
   ```
-- **Storage**:
-  - Metrics are saved in `linuxCounterResult` (counter data) and linked to `pollerResult` (device-specific results) in PostgreSQL.
+- **Response Example**:
+  ```json
+  {
+      "id": 1,
+      "name": "nishant4",
+      "username": "nishant567",
+      "password": "Nish@321"
+  }
+  ```
 
-### Communication
-- **ZeroMQ Server**:
-  - Uses a ROUTER socket to receive requests from the Java client and a DEALER socket internally (via `inproc`) for processing.
-  - Ensures asynchronous, non-blocking communication with the Go plugin engine.
-- **Client-Server Interaction**:
-  - Java client (Vert.x) sends multi-part messages `[empty, payload]` to the ROUTER socket.
-  - Responses are routed back to the client based on its identity.
+---
 
-## Architecture
+### 1.5 Delete Credentials by ID
+- **Endpoint**: `/credentials/{id}`
+- **Method**: `DELETE`
+- **Description**: Deletes credentials by ID.
+- **Request**: No payload required.
+- **Response Example**:
+  ```json
+  {
+      "message": "Credentials deleted successfully"
+  }
+  ```
+
+---
+
+## 2. Discovery
+
+### 2.1 Add Discovery
+- **Endpoint**: `/discovery/`
+- **Method**: `POST`
+- **Description**: Adds a new discovery.
+- **Request Payload**:
+  ```json
+  {
+      "ips": ["192.168.98.117"],
+      "port": 22,
+      "type": "linux",
+      "credential_id": 2
+  }
+  ```
+- **Response Example**:
+  ```json
+  {
+      "id": 1,
+      "ips": ["192.168.98.117"],
+      "port": 22,
+      "type": "linux",
+      "credential_id": 2
+  }
+  ```
+
+---
+
+### 2.2 Run Discovery
+- **Endpoint**: `/discovery/run`
+- **Method**: `POST`
+- **Description**: Runs a discovery.
+- **Request Payload**:
+  ```json
+  {
+      "credential_id": 2
+  }
+  ```
+- **Response Example**:
+  ```json
+  {
+      "message": "Discovery started successfully",
+      "discovery_id": 1
+  }
+  ```
+
+---
+
+### 2.3 Delete Discovery by ID
+- **Endpoint**: `/discovery/{id}`
+- **Method**: `DELETE`
+- **Description**: Deletes a discovery by ID.
+- **Request**: No payload required.
+- **Response Example**:
+  ```json
+  {
+      "message": "Discovery deleted successfully"
+  }
+  ```
+
+---
+
+## 3. Object
+
+### 3.1 Start Provision
+- **Endpoint**: `/provision/`
+- **Method**: `POST`
+- **Description**: Starts provisioning for an object.
+- **Request Payload**:
+  ```json
+  {
+      "monitor_id": 10,
+      "pollInterval": 3000
+  }
+  ```
+- **Response Example**:
+  ```json
+  {
+      "message": "Provisioning started successfully",
+      "monitor_id": 10
+  }
+  ```
+
+---
+
+### 3.2 Get Polling Data by Object ID
+- **Endpoint**: `/provision/pollingdata/{objectId}`
+- **Method**: `GET`
+- **Description**: Retrieves polling data by object ID.
+- **Request**: No payload required.
+- **Response Example**:
+  ```json
+  {
+      "object_id": 8,
+      "polling_data": [
+          {
+              "timestamp": "2023-10-01T12:00:00Z",
+              "value": 75
+          },
+          {
+              "timestamp": "2023-10-01T12:05:00Z",
+              "value": 80
+          }
+      ]
+  }
+  ```
+
+---
+
+## 4. Monitor
+
+### 4.1 Get Monitor by ID
+- **Endpoint**: `/provision/{monitorId}`
+- **Method**: `GET`
+- **Description**: Retrieves monitor details by ID.
+- **Request**: No payload required.
+- **Response Example**:
+  ```json
+  {
+      "id": 8,
+      "name": "Monitor 1",
+      "status": "active",
+      "pollInterval": 3000
+  }
+  ```
+
+---
+
+### 4.2 Get All Monitors
+- **Endpoint**: `/provision/`
+- **Method**: `GET`
+- **Description**: Retrieves all monitors.
+- **Request**: No payload required.
+- **Response Example**:
+  ```json
+  [
+      {
+          "id": 8,
+          "name": "Monitor 1",
+          "status": "active",
+          "pollInterval": 3000
+      },
+      {
+          "id": 9,
+          "name": "Monitor 2",
+          "status": "inactive",
+          "pollInterval": 5000
+      }
+  ]
+  ```
+
+---
+
+### 4.3 Get Status by Monitor ID
+- **Endpoint**: `/provision/status/{monitorId}`
+- **Method**: `GET`
+- **Description**: Retrieves status by monitor ID.
+- **Request**: No payload required.
+- **Response Example**:
+  ```json
+  {
+      "monitor_id": 8,
+      "status": "active"
+  }
+  ```
+
+---
+
+### 4.4 Delete Monitor by ID
+- **Endpoint**: `/provision/{monitorId}`
+- **Method**: `DELETE`
+- **Description**: Deletes a monitor by ID.
+- **Request**: No payload required.
+- **Response Example**:
+  ```json
+  {
+      "message": "Monitor deleted successfully"
+  }
+  ```
+
+---
+
+## 5. Availability
+
+### 5.1 Get Availability
+- **Endpoint**: `/availability/`
+- **Method**: `GET`
+- **Description**: Retrieves availability data.
+- **Request**: No payload required.
+- **Response Example**:
+  ```json
+  {
+      "availability": 99.9,
+      "uptime": "2023-10-01T12:00:00Z"
+  }
+  ```
+## Communication
+
+### ZeroMQ Server
+
+Uses a REQ-REP (Request-Reply) pattern for communication between the Java client and the Go plugin engine.
+
+Ensures synchronous message exchange while maintaining responsiveness.
+
+### Client-Server Interaction
+
+1. Java client (Vert.x) sends a request message directly to the ZeroMQ response socket in the Go plugin engine.
+2. The Go plugin engine processes the data and sends the response back.
+3. The server replies to the client with the processed data.
+
+### Architecture
 
 ```
-[Vert.x Java Client] --> [ZMQ ROUTER (tcp://*:5555)] --> [ZMQ DEALER (inproc://worker)] --> [Go Linux Plugin Engine]
-   |                         |                                |                             |
-   |                         |                                |                             |
-[PostgreSQL] <--- [Event Bus] <-------------------------- [Response] -------------------/
+[Vert.x Java Client] --> [ZMQ REQ-REP (tcp://*:5555)] --> [Go Linux Plugin Engine]
+|                         |                                |
+|                         |                                |
+[PostgreSQL]  <-------------------------- [Response] -------------------/
 ```
 
 - **Vert.x Client**: Handles user requests, sends messages via ZeroMQ, and stores data in PostgreSQL.
-- **ZMQ Server**: Acts as a proxy between the client and plugin engine.
 - **Go Plugin Engine**: Processes discovery and polling tasks for Linux devices.
 - **PostgreSQL**: Stores device configurations and monitoring data.
 
 ## Current Support
+
 - **Linux Devices**: Fully supported with SSH-based monitoring.
-  - Discovery: Detects reachable Linux devices.
-  - Polling: Collects system metrics.
+- **Discovery**: Detects reachable Linux devices.
+- **Polling**: Collects system metrics.
 
 ## Future Enhancements
+
 - **Windows Devices**: Add support for monitoring via WMI or PowerShell.
 - **SNMP Devices**: Integrate SNMP protocol for network equipment monitoring.
 - **Enhanced Security**: Encrypt stored credentials and add authentication for ZMQ communication.
@@ -120,86 +425,59 @@ The system is built with a modular architecture, integrating the following core 
 ## Setup Instructions
 
 ### Prerequisites
-- Java 11+ (for Vert.x)
+
+- Java 17+ (for Vert.x)
 - Maven (for dependency management)
 - Go 1.18+ (for the plugin engine)
 - PostgreSQL 13+
 - ZeroMQ library (installed for Go: `go get github.com/pebbe/zmq4`)
 
 ### Installation
-1. **Clone the Repository**:
-   ```bash
-   git clone <repository-url>
-   cd network-monitoring-system
-   ```
 
-2. **Set Up PostgreSQL**:
-   - Create a database: `CREATE DATABASE network_monitoring;`
-   - Create tables:
-     ```sql
-     CREATE TABLE linux_counter_result (
-         id SERIAL PRIMARY KEY,
-         cpu_usage VARCHAR(50),
-         memory_usage VARCHAR(50)
-     );
-     CREATE TABLE poller_result (
-         id SERIAL PRIMARY KEY,
-         counter_id INT REFERENCES linux_counter_result(id),
-         monitor_device_id VARCHAR(50),
-         counter_type VARCHAR(50)
-     );
-     ```
+#### Clone the Repository:
 
-3. **Build the Go Plugin Engine**:
-   ```bash
-   cd src/server
-   go build -o linux-plugin-engine
-   ```
+```bash
+git clone <repository-url>
+cd network-monitoring-system
+```
 
-4. **Run the ZMQ Server**:
-   ```bash
-   ./linux-plugin-engine
-   ```
-   - Default address: `tcp://*:5555`
+#### Set Up PostgreSQL:
 
-5. **Build and Run the Vert.x Application**:
-   ```bash
-   cd java-client
-   mvn clean package
-   java -jar target/network-monitoring-1.0.0.jar
-   ```
+Create a database:
 
-### Configuration
-- **Server Address**: Update `SERVER_ADDRESS` in the Java client (`tcp://127.0.0.1:5555` by default).
-- **Database**: Configure PostgreSQL connection details in the Vert.x application (e.g., via `application.conf`).
+```sql
+CREATE DATABASE network_monitoring;
+```
 
-## Usage
-1. **Send a Polling Request**:
-   - Use the Vert.x event bus to trigger polling:
-     ```java
-     vertx.eventBus().request("polling.address", devicesJsonArray, reply -> {
-         if (reply.succeeded()) {
-             System.out.println("Polling completed: " + reply.result().body());
-         }
-     });
-     ```
+#### Build the Go Plugin Engine:
 
-2. **View Logs**:
-   - Check server logs for request/response details.
-   - Check Vert.x logs for database operations.
+```bash
+cd src/server
+go build -o linux-plugin-engine
+```
+
+#### Run the ZMQ Server:
+
+```bash
+./linux-plugin-engine
+```
+
+(Default address: `tcp://*:5555`)
+
+#### Build and Run the Vert.x Application:
+
+```bash
+cd java-client
+mvn clean package
+java -jar target/network-monitoring-1.0.0.jar
+```
 
 ## Contributing
+
 - Report issues or suggest features via GitHub Issues.
 - Submit pull requests for enhancements or bug fixes.
 
 ## License
+
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
----
-
-### Notes:
-- **Assumptions**: I assumed typical metric names (`cpu_usage`, `memory_usage`) for the polling response. Adjust these based on what `linux.CollectLinuxData` actually returns.
-- **Future Features**: Mentioned Windows and SNMP support as planned expansions, which you can flesh out later.
-- **Database Schema**: Provided a basic schema; enhance it with additional fields (e.g., timestamps) as needed.
-
-Let me know if you want to refine any section or add more specific details about your project!
