@@ -42,7 +42,7 @@ public class Discovery
 
     var payloadValidationResult = Utils.isValidPayload(DISCOVERY_TABLE, payload);
 
-    if (payloadValidationResult.get("isValid").equals("false"))
+    if (payloadValidationResult.get(IS_VALID_KEY).equals("false"))
     {
       var errorResponse = Utils.createResponse("error", formatInvalidResponse(payloadValidationResult));
 

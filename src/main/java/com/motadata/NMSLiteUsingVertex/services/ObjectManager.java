@@ -100,6 +100,9 @@ public class ObjectManager extends AbstractVerticle
 
       for (JsonObject object : Utils.getObjectQueue())
       {
+        if(object.getString(PROVISIONING_STATUS_KEY).equals("pending"))
+          continue;
+
         var lastPollTime = object.getLong(LAST_POLL_TIME_KEY);
 
         var timeSinceLastPoll = currentTime - lastPollTime;

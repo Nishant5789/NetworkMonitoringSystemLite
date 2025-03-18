@@ -125,6 +125,18 @@ public class Utils
     }
   }
 
+  // add objectwithdata in objectqueue
+  public static void addObjectInQueue(JsonObject obj)
+  {
+    objectQueue.add(obj);
+  }
+
+  // return objectQueue
+  public static Queue<JsonObject> getObjectQueue()
+  {
+    return objectQueue;
+  }
+
   // update objectqueue from database
   public static Future<Object> updateObjectQueueFromDatabase()
   {
@@ -142,6 +154,7 @@ public class Utils
             .put(PLUGIN_ENGINE_TYPE_KEY, obj.getJsonObject("object_data").getString(PLUGIN_ENGINE_TYPE_KEY))
             .put(OBJECT_ID_KEY, obj.getInteger(OBJECT_ID_KEY))
             .put(LAST_POLL_TIME_KEY, obj.getLong(LAST_POLL_TIME_KEY))
+            .put(PROVISIONING_STATUS_KEY, obj.getString(PROVISIONING_STATUS_KEY))
             .put(POLL_INTERVAL_KEY, obj.getInteger(POLL_INTERVAL_KEY));
 
           objectQueue.add(filteredObject);
@@ -155,18 +168,6 @@ public class Utils
       });
   }
 
-  // add objectwithdata in objectqueue
-  public static void addObjectInQueue(JsonObject obj)
-  {
-    objectQueue.add(obj);
-  }
-
-  // return objectQueue
-  public static Queue<JsonObject> getObjectQueue()
-  {
-    return objectQueue;
-  }
-
   // handle update lastpolltime in objectqueue
   public static void updateObjectLastPollTimeInObjectQueue(int objectId, Long lastPollTIME)
   {
@@ -174,6 +175,33 @@ public class Utils
       .filter(obj -> obj.getInteger(OBJECT_ID_KEY) == objectId)
       .findFirst()
       .ifPresent(obj -> obj.put(LAST_POLL_TIME_KEY, lastPollTIME));
+  }
+
+  // get CounterObject from pollingdataCache
+  public static JsonArray getPollDataFromCache(String objectId)
+  {
+    JsonArray resultArray = new JsonArray();
+
+    pollingDataCache.stream()
+      .filter(obj -> objectId.equals(obj.getString(OBJECT_ID_KEY)))
+      .forEach(resultArray::add);
+
+    return resultArray;
+  }
+
+  // add pollResponce in cache
+  public static void addPollingResponse(JsonObject pollResponsePayload)
+  {
+    if (pollResponsePayload == null)
+    {
+      LOGGER.warning("Attempted to add a null JsonObject to pollingDataCache.");
+      return;
+    }
+
+    // added polling responce in PollingdataCache
+    pollingDataCache.add(pollResponsePayload);
+
+    LOGGER.info("Added polling response to pollingDataCache: " + pollResponsePayload.encode());
   }
 
   // update pollingDataCache from database
@@ -204,33 +232,6 @@ public class Utils
         LOGGER.severe("Failed to update polling data cache: " + err.getMessage());
         err.printStackTrace();
       });
-  }
-
-  // get CounterObject from pollingdataCache
-  public static JsonArray getPollDataFromCache(String objectId)
-  {
-    JsonArray resultArray = new JsonArray();
-
-    pollingDataCache.stream()
-      .filter(obj -> objectId.equals(obj.getString(OBJECT_ID_KEY)))
-      .forEach(resultArray::add);
-
-    return resultArray;
-  }
-
-  // add pollResponce in cache
-  public static void addPollingResponse(JsonObject pollResponsePayload)
-  {
-    if (pollResponsePayload == null)
-    {
-      LOGGER.warning("Attempted to add a null JsonObject to pollingDataCache.");
-      return;
-    }
-
-    // added polling responce in PollingdataCache
-    pollingDataCache.add(pollResponsePayload);
-
-    LOGGER.info("Added polling response to pollingDataCache: " + pollResponsePayload.encode());
   }
 
   // validate payload
