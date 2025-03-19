@@ -22,11 +22,12 @@ import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
 
 public class Utils
 {
-  private static final Logger LOGGER = AppLogger.getLogger();
+//  private static final Logger LOGGER = AppLogger.getLogger();
+  private static final Logger LOGGER =  Logger.getLogger(Utils.class.getName());
 
-  private static final List<JsonObject> pollingDataCache = new CopyOnWriteArrayList<>();
+  private static final List<JsonObject> pollingDataCache = new ArrayList<>();
 
-  private static final Queue<JsonObject> objectQueue = new ConcurrentLinkedQueue<>();
+  private static final Queue<JsonObject> objectQueue = new LinkedList<>();
 
   // create send responseObject
   public static JsonObject createResponse(String status, String statusMsg)
@@ -140,12 +141,17 @@ public class Utils
   // update objectqueue from database
   public static Future<Object> updateObjectQueueFromDatabase()
   {
-    return QueryHandler.getAll("provisioned_objects")
+    return QueryHandler.getAll(PROVISIONED_OBJECTS_TABLE)
       .onSuccess(result ->
       {
+        LOGGER.info("Received object  from DB: " + (result != null ? result.size() : 0));
+
         objectQueue.clear(); // Clear the existing queue before updating
         for (JsonObject obj : result)
         {
+          if(obj.getString(PROVISIONING_STATUS_KEY).equals("pending"))
+            continue;
+
           JsonObject filteredObject = new JsonObject()
             .put(IP_KEY, obj.getJsonObject("object_data").getString(IP_KEY))
             .put(PORT_KEY, obj.getJsonObject("object_data").getString(PORT_KEY))
@@ -207,18 +213,16 @@ public class Utils
   // update pollingDataCache from database
   public static Future<Object> updatePollingDataCacheFromDatabase()
   {
-    LOGGER.info("updatePollingDataCache() called");
-
     return QueryHandler.getAll(POLLING_RESULTS_TABLE)
       .map(jsonList ->
       {
-        LOGGER.info("Received data from DB: " + (jsonList != null ? jsonList.size() : 0));
+        LOGGER.info("Received polling data from DB: " + (jsonList != null ? jsonList.size() : 0));
 
         if (jsonList != null && !jsonList.isEmpty())
         {
           pollingDataCache.clear();
           pollingDataCache.addAll(jsonList);
-          LOGGER.info("Polling data cache updated successfully with " + jsonList.size() + " new records.");
+          LOGGER.info("Polling data cache updated successfully");
         }
         else
         {

@@ -21,12 +21,14 @@ import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
 
 public class ObjectManager extends AbstractVerticle
 {
-  private static final Logger logger = AppLogger.getLogger();
+//  private static final Logger LOGGER = AppLogger.getLogger();
+  private static final Logger LOGGER =  Logger.getLogger(ObjectManager.class.getName());
+
 
   @Override
   public void start(Promise<Void> startPromise) throws Exception
   {
-    logger.info("Object services deployed: " + Thread.currentThread().getName());
+    LOGGER.info("Object services deployed: " + Thread.currentThread().getName());
 
     vertx.eventBus().localConsumer(PROVISION_EVENT, this::provision);
 
@@ -49,7 +51,7 @@ public class ObjectManager extends AbstractVerticle
       {
         if (provisionRecord == null)
         {
-          logger.info("provision details  is not found for this object_id in database");
+          LOGGER.info("provision details  is not found for this object_id in database");
           message.reply(Utils.createResponse("failed", "provision details  is not found for this object_id in database"));
           return;
         }
@@ -66,25 +68,25 @@ public class ObjectManager extends AbstractVerticle
           {
             if (result.succeeded())
             {
-              logger.info("Update successful for Object ID: " + object.getInteger(OBJECT_ID_KEY));
+              LOGGER.info("Update successful for Object ID: " + object.getInteger(OBJECT_ID_KEY));
             }
             else
             {
-              logger.warning("Update failed: " + result.cause().getMessage());
+              LOGGER.warning("Update failed: " + result.cause().getMessage());
             }
           });
 
-        logger.info("Device's ip: " + object.getString(IP_KEY) + " added in objectQueue");
+        LOGGER.info("Device's ip: " + object.getString(IP_KEY) + " added in objectQueue");
 
         var provisionUpdatePayload = new JsonObject().put(PROVISIONING_STATUS_KEY,"active");
 
         QueryHandler.updateByField(PROVISIONED_OBJECTS_TABLE, provisionUpdatePayload, OBJECT_ID_KEY, objectId)
-            .onSuccess(res->message.reply(Utils.createResponse("success", "Polling is started for provisioned device")))
-            .onFailure(err->message.reply(err.getMessage()));
+            .onSuccess(res -> message.reply(Utils.createResponse("success", "Polling is started for provisioned device")))
+            .onFailure(err -> message.reply(err.getMessage()));
       })
       .onFailure(err ->
       {
-        logger.warning("database query failed");
+        LOGGER.warning("database query failed");
         message.reply(Utils.createResponse("error", err.getMessage()));
       });
   }
@@ -92,9 +94,9 @@ public class ObjectManager extends AbstractVerticle
   // schedule object polling
   private void handleObjectScheduling()
   {
-    Main.vertx().setTimer(5000,timeId ->
+    Main.vertx().setPeriodic(2000,timeId ->
     {
-      logger.info("Polling is started, objectQueue: " + Utils.getObjectQueue());
+      LOGGER.info("Polling is started, objectQueue: " + Utils.getObjectQueue());
 
       var currentTime = System.currentTimeMillis();
 
@@ -102,9 +104,6 @@ public class ObjectManager extends AbstractVerticle
 
       for (JsonObject object : Utils.getObjectQueue())
       {
-        if(object.getString(PROVISIONING_STATUS_KEY).equals("pending"))
-          continue;
-
         var lastPollTime = object.getLong(LAST_POLL_TIME_KEY);
 
         var timeSinceLastPoll = currentTime - lastPollTime;
@@ -113,7 +112,7 @@ public class ObjectManager extends AbstractVerticle
         {
           objectToPoll.add(object);
 
-          logger.info("Object sent for polling: " + objectToPoll.encodePrettily());
+          LOGGER.info("Object sent for polling: " + objectToPoll.encodePrettily());
 
           handleDevicePolling(objectToPoll);
         }
@@ -128,11 +127,11 @@ public class ObjectManager extends AbstractVerticle
     {
       if(result.succeeded())
       {
-        logger.info("Polling is completed");
+        LOGGER.info("Polling is completed");
       }
       else
       {
-        logger.severe("Failed to run polling");
+        LOGGER.severe("Failed to run polling");
       }
     });
   }

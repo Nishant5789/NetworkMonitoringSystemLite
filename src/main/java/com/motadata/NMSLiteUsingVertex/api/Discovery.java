@@ -89,17 +89,7 @@ public class Discovery
     }
 
     QueryHandler.getById(DISCOVERY_TABLE, id)
-      .compose( discoveryRecord ->
-      {
-        if(discoveryRecord.getString(DISCOVERY_STATUS_KEY).equals("pending"))
-        {
-          return ctx.vertx().eventBus().request(DISCOVERY_EVENT, discoveryRecord);
-        }
-        else
-        {
-          return Future.failedFuture("discovery is already completed");
-        }
-      })
+      .compose( discoveryRecord -> ctx.vertx().eventBus().request(DISCOVERY_EVENT, discoveryRecord))
       .compose(reply ->
       {
         var updatePayload = new JsonObject().put(DISCOVERY_STATUS_KEY, "completed");

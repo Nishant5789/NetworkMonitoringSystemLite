@@ -23,7 +23,9 @@ import static com.motadata.NMSLiteUsingVertex.utils.Utils.formatInvalidResponse;
 
 public class Discovery extends AbstractVerticle
 {
-  private static final Logger LOGGER = AppLogger.getLogger();
+//  private static final Logger LOGGER = AppLogger.getLogger();
+  private static final Logger LOGGER =  Logger.getLogger(Discovery.class.getName());
+
 
   @Override
   public void start()

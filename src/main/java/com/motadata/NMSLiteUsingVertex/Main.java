@@ -1,5 +1,6 @@
 package com.motadata.NMSLiteUsingVertex;
 
+import com.motadata.NMSLiteUsingVertex.config.ZMQConfig;
 import com.motadata.NMSLiteUsingVertex.database.DatabaseClient;
 import com.motadata.NMSLiteUsingVertex.api.Server;
 import com.motadata.NMSLiteUsingVertex.services.Discovery;
@@ -36,6 +37,7 @@ public class Main
   private static final int EVENT_BUS_RECONNECT_INTERVAL = 10000;
 
   private static final Logger LOGGER =  Logger.getLogger(Main.class.getName());
+//    private static final Logger LOGGER =  AppLogger.getLogger();
 
   private static final Vertx vertx = Vertx.vertx( new VertxOptions()
     .setWorkerPoolSize(VERTX_WORKER_POOL_SIZE)
@@ -79,7 +81,7 @@ public class Main
           }
           else
           {
-            LOGGER.severe("Failed to initialize database or update polling data cache: " + ar.cause().getMessage());
+            LOGGER.severe("Failed to initialize database or update polling data cache & objectQueue: " + ar.cause().getMessage());
             ar.cause().printStackTrace();
           }
       });
@@ -88,6 +90,13 @@ public class Main
     Runtime.getRuntime().addShutdownHook(new Thread(() ->
     {
       LOGGER.info("Shutdown signal received. Cleaning up resources...");
+
+      // close zmq Socket
+      ZMQConfig.closeSocket();
+
+      // close Postgrel pool
+      DatabaseClient.closePool();
+
       vertx.close(ar ->
       {
         if (ar.succeeded())

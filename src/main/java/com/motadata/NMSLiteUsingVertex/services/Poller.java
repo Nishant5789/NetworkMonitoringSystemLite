@@ -20,7 +20,8 @@
 
   public class Poller extends AbstractVerticle
   {
-    private static final Logger LOGGER = AppLogger.getLogger();
+//    private static final Logger LOGGER = AppLogger.getLogger();
+    private static final Logger LOGGER =  Logger.getLogger(Poller.class.getName());
 
     private static final Map<String, Integer> pendingRequests = new HashMap<>();
 

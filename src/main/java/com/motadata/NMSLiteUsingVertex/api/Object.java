@@ -70,7 +70,7 @@ public class Object
           return Future.failedFuture("object provisioning is already completed");
         }
       })
-        .onSuccess(replybody->
+        .onSuccess(replybody ->
         {
           var response = (JsonObject) replybody.body();
 

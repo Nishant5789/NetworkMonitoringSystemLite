@@ -15,7 +15,8 @@ import static com.motadata.NMSLiteUsingVertex.utils.Utils.formatInvalidResponse;
 
 public class Credential
 {
-  private static final Logger LOGGER = AppLogger.getLogger();
+//  private static final Logger LOGGER = AppLogger.getLogger();
+  private static final Logger LOGGER =  Logger.getLogger(Credential.class.getName());
 
   // handle save credential
   public static void saveCredential(RoutingContext ctx)
