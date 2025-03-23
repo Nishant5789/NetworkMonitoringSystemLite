@@ -39,7 +39,7 @@ public class Discovery extends AbstractVerticle
       {
         if (!flag)
         {
-          return Future.failedFuture("object is not available");
+          return Future.failedFuture("port is not available");
         }
 
         return QueryHandler.getById(CREDENTIAL_TABLE, credentialId);

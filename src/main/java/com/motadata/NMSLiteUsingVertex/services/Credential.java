@@ -188,7 +188,7 @@ public class Credential
         var statusMsg = deletedStatus ? "Credential deleted successfully" : "No matching record found";
         LOGGER.info(statusMsg);
 
-        var response = new JsonObject().put("status", "success").put("statusMsg", statusMsg);
+        var response = new JsonObject().put(STATUS_KEY, STATUS_RESPONSE_SUCCESS).put(STATUS_MSG_KEY, statusMsg);
 
         ctx.response().setStatusCode(200).end(response.encodePrettily());
       })

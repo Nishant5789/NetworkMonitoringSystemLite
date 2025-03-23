@@ -46,7 +46,7 @@ public class Utils
     {
       try
       {
-        var command = "ping -c 3 " + ip + " | awk '/packets transmitted/ {if ($6 == \"100%\") print \"false\"; else print \"true\"}'";
+        var command = "ping -c 3 " + ip + " | awk '/packets transmitted/ {if ($(NF-4)== \"100%\") print \"false\"; else print \"true\"}'";
 
         var processBuilder = new ProcessBuilder("sh", "-c", command);
 
@@ -196,7 +196,7 @@ public class Utils
   // update objectqueue from database
   public static Future<Object> updateObjectQueueFromDatabase()
   {
-    return QueryHandler.getAllWithJoin(PROVISIONED_OBJECTS_TABLE, CREDENTIAL_TABLE, CREDENTIAL_ID_KEY)
+    return QueryHandler.getAllWithJoinTable(PROVISIONED_OBJECTS_TABLE, CREDENTIAL_TABLE, CREDENTIAL_ID_KEY)
       .onSuccess(result ->
       {
         LOGGER.info("Received object  from DB: " + (result != null ? result.size() : 0));

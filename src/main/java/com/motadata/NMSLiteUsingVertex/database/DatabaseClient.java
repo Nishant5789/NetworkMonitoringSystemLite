@@ -10,6 +10,8 @@ import io.vertx.sqlclient.PoolOptions;
 
 import java.util.logging.Logger;
 
+import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
+
 public class DatabaseClient
 {
   private static final Logger LOGGER = AppLogger.getLogger();
@@ -22,13 +24,13 @@ public class DatabaseClient
     Promise<Void> promise = Promise.promise();
 
     PgConnectOptions connectOptions = new PgConnectOptions()
-      .setPort(5432)
-      .setHost("localhost")
-      .setDatabase("postgres") // Connect to default DB
-      .setUser("postgres")
-      .setPassword("1234");
+      .setPort(DATABASE_PORT)
+      .setHost(DATABASE_HOST)
+      .setDatabase(DEFAULT_DATABASE_NAME) // Connect to default DB
+      .setUser(DATABASE_USERNAME)
+      .setPassword(DATABASE_PASSWORD);
 
-    PoolOptions poolOptions = new PoolOptions().setMaxSize(5);
+    PoolOptions poolOptions = new PoolOptions().setMaxSize(MAX_POOL_SIZE);
     pool = Pool.pool(vertx, connectOptions, poolOptions);
 
     // Check if database exists
@@ -75,11 +77,12 @@ public class DatabaseClient
     }
 
     PgConnectOptions newConnectOptions = new PgConnectOptions()
-      .setPort(5432)
-      .setHost("localhost")
-      .setDatabase("nms_lite_18")
-      .setUser("postgres")
-      .setPassword("1234");
+      .setPort(DATABASE_PORT)
+      .setHost(DATABASE_HOST)
+      .setDatabase(DATABASE_NAME)
+      .setUser(DATABASE_USERNAME)
+      .setPassword(DATABASE_PASSWORD);
+
 
     PoolOptions newPoolOptions = new PoolOptions().setMaxSize(5);
     pool = Pool.pool(vertx, newConnectOptions, newPoolOptions);

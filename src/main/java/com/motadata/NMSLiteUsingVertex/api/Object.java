@@ -72,7 +72,7 @@ public class Object
             return;
           }
 
-          ctx.vertx().eventBus().<JsonObject>request(PROVISION_EVENT, payload)
+          Main.vertx().eventBus().<JsonObject>request(PROVISION_EVENT, payload)
             .onSuccess(replybody ->
             {
               var response = replybody.body();

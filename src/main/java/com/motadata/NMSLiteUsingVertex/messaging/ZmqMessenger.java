@@ -73,14 +73,14 @@ public class ZmqMessenger extends AbstractVerticle
 
   private void handleRequest(Message<JsonObject> message)
   {
-    LOGGER.info("zmq request send using: " + Thread.currentThread().getName() + "with data : " + message.body());
-
     var requestId =  UUID.randomUUID().toString();
     var messagePayload =  message.body();
 
     messagePayload.put(REQUEST_ID, requestId);
 
     pendingRequests.put(requestId, new PendingRequest(message, System.currentTimeMillis()));
+
+    LOGGER.info("zmq request send using: " + Thread.currentThread().getName() + " with data : " + message.body());
 
     dealer.send("", ZMQ.SNDMORE);
 
@@ -108,6 +108,8 @@ public class ZmqMessenger extends AbstractVerticle
         if (pendingRequests.containsKey(requestId))
         {
           PendingRequest requestValue = pendingRequests.get(requestId);
+
+          LOGGER.info("zmq response received using: " + Thread.currentThread().getName() + " with statusMsg : "+replyJson.getString(STATUS_MSG_KEY));
 
           requestValue.message.reply(replyJson);
 

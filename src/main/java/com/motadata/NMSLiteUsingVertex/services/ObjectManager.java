@@ -45,7 +45,7 @@ public class ObjectManager extends AbstractVerticle
     var pollInterval = payload.getInteger(POLL_INTERVAL_KEY);
     var objectPayload = new JsonObject[1];
 
-    QueryHandler.getByFieldWithJoin(DISCOVERY_TABLE, CREDENTIAL_TABLE, CREDENTIAL_ID_KEY, IP_KEY, ip)
+    QueryHandler.getByFieldWithJoinTable(DISCOVERY_TABLE, CREDENTIAL_TABLE, CREDENTIAL_ID_KEY, IP_KEY, ip)
       .compose(discoveryRecord ->
       {
         if (discoveryRecord == null)
@@ -104,7 +104,7 @@ public class ObjectManager extends AbstractVerticle
   // schedule object polling
   private void handleObjectScheduling()
   {
-    Main.vertx().setTimer(6000, timeId ->
+    Main.vertx().setTimer(60000, timeId ->
     {
       LOGGER.info("Polling is started, objectQueue: " + Utils.getObjectQueue());
 

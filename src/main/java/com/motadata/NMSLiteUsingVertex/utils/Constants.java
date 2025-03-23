@@ -103,4 +103,18 @@ public class Constants
   public static final String STATUS_RESPONSE_FAIIED = "failed";
 
   public static final String STATUS_RESPONSE_SUCCESS = "success";
+
+  public static final Integer DATABASE_PORT = 5432;
+
+  public static final String DATABASE_HOST = "localhost";
+
+  public static final String DEFAULT_DATABASE_NAME = "postgres";
+
+  public static final String DATABASE_USERNAME = "postgres";
+
+  public static final String DATABASE_PASSWORD = "1234";
+
+  public static final Integer MAX_POOL_SIZE = 5;
+
+  public static final String DATABASE_NAME = "nms_lite_18";
 }

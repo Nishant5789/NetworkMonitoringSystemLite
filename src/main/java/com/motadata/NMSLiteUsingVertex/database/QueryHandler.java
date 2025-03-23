@@ -44,7 +44,7 @@ public class QueryHandler
 
       if (value instanceof Map)
       {
-        tuple.addValue(new JsonObject((Map<String, Object>) value).encode()); // Manual wrap avoids JsonObject.mapFrom()
+        tuple.addValue(new JsonObject((Map<String, Object>) value).encode());
       }
       else if (value instanceof List)
       {
@@ -195,7 +195,7 @@ public class QueryHandler
   }
 
   // Genralized find by ID Using join
-  public static Future<JsonObject> getByFieldWithJoin(String tableName1, String tableName2, String joiningOnField, String fieldName, String fieldValue)
+  public static Future<JsonObject> getByFieldWithJoinTable(String tableName1, String tableName2, String joiningOnField, String fieldName, String fieldValue)
   {
     var query = "SELECT t1.*, t2.* " + "FROM " + tableName1 + " t1 " + "JOIN " + tableName2 + " t2 " + "ON t1." + joiningOnField + " = t2." + joiningOnField + " " + "WHERE t1." + fieldName + " = $1";
 
@@ -219,7 +219,8 @@ public class QueryHandler
       });
   }
 
-  public static Future<List<JsonObject>> getAllWithJoin(String tableName1, String tableName2, String joiningOnField)
+  // Genralized find all with join two table
+  public static Future<List<JsonObject>> getAllWithJoinTable(String tableName1, String tableName2, String joiningOnField)
   {
     var query = "SELECT t1.*, t2.* " + "FROM " + tableName1 + " t1 " + "JOIN " + tableName2 + " t2 " + "ON t1." + joiningOnField + " = t2." + joiningOnField;
 
@@ -245,6 +246,7 @@ public class QueryHandler
       });
   }
 
+  // Genralized find all by field with join two table
   public static Future<List<JsonObject>> getAllByField(String tableName, String fieldName, Object fieldValue)
   {
     var query = String.format("SELECT * FROM %s WHERE %s = $1", tableName, fieldName);
