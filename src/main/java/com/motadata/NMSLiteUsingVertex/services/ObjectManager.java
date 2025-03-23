@@ -5,6 +5,7 @@ import com.motadata.NMSLiteUsingVertex.database.QueryHandler;
 import com.motadata.NMSLiteUsingVertex.utils.AppLogger;
 import com.motadata.NMSLiteUsingVertex.utils.Utils;
 import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.eventbus.Message;
 import io.vertx.core.json.JsonArray;
@@ -24,13 +25,12 @@ public class ObjectManager extends AbstractVerticle
 //  private static final Logger LOGGER = AppLogger.getLogger();
   private static final Logger LOGGER =  Logger.getLogger(ObjectManager.class.getName());
 
-
   @Override
   public void start(Promise<Void> startPromise) throws Exception
   {
     LOGGER.info("Object services deployed: " + Thread.currentThread().getName());
 
-    vertx.eventBus().localConsumer(PROVISION_EVENT, this::provision);
+    vertx.eventBus().<JsonObject>localConsumer(PROVISION_EVENT, this::provision);
 
     // start object scheduling
     handleObjectScheduling();
@@ -38,63 +38,73 @@ public class ObjectManager extends AbstractVerticle
   }
 
   // handle provisioning
-  private void provision(Message<Object> message)
+  private void provision(Message<JsonObject> message)
   {
-    var payload = (JsonObject) message.body();
-
-    var object_id = payload.getInteger(OBJECT_ID_KEY);
-
+    var payload = message.body();
+    var ip = payload.getString(IP_KEY);
     var pollInterval = payload.getInteger(POLL_INTERVAL_KEY);
+    var objectPayload = new JsonObject[1];
 
-    QueryHandler.getById(PROVISIONED_OBJECTS_TABLE ,object_id.toString())
-      .onSuccess(provisionRecord->
+    QueryHandler.getByFieldWithJoin(DISCOVERY_TABLE, CREDENTIAL_TABLE, CREDENTIAL_ID_KEY, IP_KEY, ip)
+      .compose(discoveryRecord ->
       {
-        if (provisionRecord == null)
+        if (discoveryRecord == null)
         {
-          LOGGER.info("provision details  is not found for this object_id in database");
-          message.reply(Utils.createResponse("failed", "provision details  is not found for this object_id in database"));
-          return;
+          LOGGER.info("Discovery details not found for IP: " + ip);
+
+          return Future.failedFuture("No discovery record found");
+        }
+        else if(discoveryRecord.getString(DISCOVERY_STATUS_KEY).equals(STATUS_PENDING))
+        {
+          LOGGER.info("Discovery is pending for this IP: " + ip);
+
+          return Future.failedFuture("Discovery run is pending for your provided IP");
         }
 
-        var objectId = provisionRecord.getInteger(OBJECT_ID_KEY);
-        var object = provisionRecord.getJsonObject("object_data").put(OBJECT_ID_KEY,objectId).put(LAST_POLL_TIME_KEY, System.currentTimeMillis()).put(POLL_INTERVAL_KEY, pollInterval);
+        var credentialDataPayload = new JsonObject(discoveryRecord.getString(CREDENTIAL_DATA_KEY));
+        objectPayload[0] = createObject(credentialDataPayload, discoveryRecord, pollInterval);
+        var provisionObjectPayload = createProvisionObjectPayload(discoveryRecord, pollInterval);
 
-        Utils.addObjectInQueue(object);
+        return QueryHandler.save(PROVISIONED_OBJECTS_TABLE, provisionObjectPayload);
+      })
+      .compose(saveResult ->
+      {
+        LOGGER.info("Provisioned object successfully created for IP: " + ip);
 
-        var updatePayload = new JsonObject().put(LAST_POLL_TIME_KEY, System.currentTimeMillis()).put(POLL_INTERVAL_KEY, pollInterval);
+        return QueryHandler.getByField(PROVISIONED_OBJECTS_TABLE, IP_KEY, ip);
+      })
+      .onSuccess(provisionedObjectRecord ->
+      {
+        if (provisionedObjectRecord != null)
+        {
+          var objectId = provisionedObjectRecord.getInteger(OBJECT_ID_KEY);
+          objectPayload[0].put(OBJECT_ID_KEY, objectId);  // ✅ Add objectId after fetching
 
-        QueryHandler.updateByField(PROVISIONED_OBJECTS_TABLE, updatePayload, OBJECT_ID_KEY, objectId)
-          .onComplete(result ->
-          {
-            if (result.succeeded())
-            {
-              LOGGER.info("Update successful for Object ID: " + object.getInteger(OBJECT_ID_KEY));
-            }
-            else
-            {
-              LOGGER.warning("Update failed: " + result.cause().getMessage());
-            }
-          });
+          Utils.addObjectInQueue(objectPayload[0]);
 
-        LOGGER.info("Device's ip: " + object.getString(IP_KEY) + " added in objectQueue");
+          LOGGER.info("Object with IP: " + ip + " and Object ID: " + objectId + " added to objectQueue");
 
-        var provisionUpdatePayload = new JsonObject().put(PROVISIONING_STATUS_KEY,"active");
+          message.reply(Utils.createResponse(STATUS_KEY, STATUS_RESPONSE_SUCCESS));
+        }
+        else
+        {
+          LOGGER.warning("Provisioned object record not found after saving for IP: " + ip);
 
-        QueryHandler.updateByField(PROVISIONED_OBJECTS_TABLE, provisionUpdatePayload, OBJECT_ID_KEY, objectId)
-            .onSuccess(res -> message.reply(Utils.createResponse("success", "Polling is started for provisioned device")))
-            .onFailure(err -> message.reply(err.getMessage()));
+          message.reply(Utils.createResponse(STATUS_RESPONSE_FAIIED, "Provisioned object record not found"));
+        }
       })
       .onFailure(err ->
       {
-        LOGGER.warning("database query failed");
-        message.reply(Utils.createResponse("error", err.getMessage()));
+        LOGGER.warning("Database query failed: " + err);
+
+        message.reply(Utils.createResponse(STATUS_RESPONSE_FAIIED, err.getMessage()));
       });
   }
 
   // schedule object polling
   private void handleObjectScheduling()
   {
-    Main.vertx().setPeriodic(2000,timeId ->
+    Main.vertx().setTimer(6000, timeId ->
     {
       LOGGER.info("Polling is started, objectQueue: " + Utils.getObjectQueue());
 
@@ -114,25 +124,31 @@ public class ObjectManager extends AbstractVerticle
 
           LOGGER.info("Object sent for polling: " + objectToPoll.encodePrettily());
 
-          handleDevicePolling(objectToPoll);
+          Main.vertx().eventBus().send(POLLING_EVENT, objectToPoll);
         }
       }
     });
   }
 
-  // handle device polling
-  private void handleDevicePolling(JsonArray objectToPoll)
+ //create object with data to store on objectQueue
+  private JsonObject createObject(JsonObject credentialDataPayload, JsonObject discoveryRecord, Integer pollInterval)
   {
-    Main.vertx().eventBus().request(POLLING_EVENT, objectToPoll, result->
-    {
-      if(result.succeeded())
-      {
-        LOGGER.info("Polling is completed");
-      }
-      else
-      {
-        LOGGER.severe("Failed to run polling");
-      }
-    });
+    return new JsonObject()
+      .put(USERNAME_KEY, credentialDataPayload.getString(USERNAME_KEY))
+      .put(PASSWORD_KEY, credentialDataPayload.getString(PASSWORD_KEY))
+      .put(IP_KEY, discoveryRecord.getString(IP_KEY))
+      .put(PORT_KEY, discoveryRecord.getString(PORT_KEY))
+      .put(PLUGIN_ENGINE_TYPE_KEY, PLUGIN_ENGINE_LINUX)
+      .put(LAST_POLL_TIME_KEY, System.currentTimeMillis())
+      .put(POLL_INTERVAL_KEY, pollInterval);
+  }
+
+  //create provision_object  store on provisioned_objectstable on database
+  private JsonObject createProvisionObjectPayload(JsonObject discoveryRecord, Integer pollInterval)
+  {
+    return new JsonObject()
+      .put(IP_KEY, discoveryRecord.getString(IP_KEY))
+      .put(CREDENTIAL_ID_KEY, Integer.parseInt(discoveryRecord.getString(CREDENTIAL_ID_KEY)))
+      .put(POLL_INTERVAL_KEY, pollInterval);
   }
 }

@@ -2,8 +2,10 @@ package com.motadata.NMSLiteUsingVertex.utils;
 
 import com.motadata.NMSLiteUsingVertex.Main;
 import com.motadata.NMSLiteUsingVertex.database.QueryHandler;
+import com.motadata.NMSLiteUsingVertex.services.Credential;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
+import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.json.impl.JsonUtil;
@@ -44,9 +46,9 @@ public class Utils
     {
       try
       {
-        var command = "ping -c 3 " + ip + " | awk '/packets transmitted/ {if ($6 == \"0%\") print \"true\"; else print \"false\"}'";
+        var command = "ping -c 3 " + ip + " | awk '/packets transmitted/ {if ($6 == \"100%\") print \"false\"; else print \"true\"}'";
 
-        ProcessBuilder processBuilder = new ProcessBuilder("sh", "-c", command);
+        var processBuilder = new ProcessBuilder("sh", "-c", command);
 
         processBuilder.redirectErrorStream(true);
 
@@ -88,15 +90,15 @@ public class Utils
         }
         else
         {
-          LOGGER.severe("Failed TCP connection for IP: " + ip + " Port: " + port + " - " + res.cause().getMessage());
+          LOGGER.severe("tcp connection is unSuccessful for IP: " + ip + " Port: " + port + " - " + res.cause().getMessage());
           promise.complete(false);
         }
       });
     }
     catch (Exception exception)
     {
-      LOGGER.severe("Failed to connect to IP " + ip + " Port: " + port + " - " + exception.getMessage());
-      promise.fail(exception);
+      LOGGER.severe("Failed to connection during  tcp connection for IP " + ip + " Port: " + port + " - " + exception.getMessage());
+      promise.fail("Failed to connection during tcp connection for IP " + ip + "& Port: " + port);
     }
 
     return promise.future();
@@ -111,19 +113,72 @@ public class Utils
       {
         if (isPingReachable)
         {
+          LOGGER.info("Ping command is  successfully executed for ip: " + ip);
+
           return checkPort(ip, port);
         }
         else
         {
-          return Future.failedFuture("Device is not reachable");
+          return Future.failedFuture("ping is unsuccessful for iP: " + ip);
         }
       });
     }
     catch (Exception exception)
     {
       LOGGER.severe("Failed to check device availability: " + exception.getMessage());
-      return Future.failedFuture("Failed to check device availability. " + exception.getMessage());
+      return Future.failedFuture("Failed to check device availability");
     }
+  }
+
+  // Start GoPlugin
+  public static Future<String> startGOPlugin()
+  {
+    Promise<String> promise = Promise.promise();
+
+    Main.vertx().executeBlocking(nestedPromise ->
+    {
+      try
+      {
+        ProcessBuilder builder = new ProcessBuilder("bash", "-c", "cd /home/nishant/codeworkspace/GoLandWorkSpace/PluginEngine && /usr/local/go/bin/go run main.go");
+        builder.redirectErrorStream(true);
+        Process process = builder.start();
+
+        new Thread(() ->
+        {
+          try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream())))
+          {
+            String line;
+
+            while ((line = reader.readLine()) != null)
+            {
+              if (line.contains("Starting ZMQ Server..."))
+              {
+                nestedPromise.complete("ZMQ Server Started Successfully");
+              }
+            }
+          }
+          catch (IOException e)
+          {
+            nestedPromise.fail("Error reading Go plugin output: " + e.getMessage());
+          }
+        }).start();
+      }
+    catch (IOException e)
+    {
+      nestedPromise.fail("Failed to start GO Plugin: " + e.getMessage());
+    }
+  }, res ->
+    {
+      if (res.succeeded())
+      {
+        promise.complete(res.result().toString());
+      }
+      else
+      {
+        promise.fail(res.cause());
+      }
+    });
+    return promise.future();
   }
 
   // add objectwithdata in objectqueue
@@ -141,7 +196,7 @@ public class Utils
   // update objectqueue from database
   public static Future<Object> updateObjectQueueFromDatabase()
   {
-    return QueryHandler.getAll(PROVISIONED_OBJECTS_TABLE)
+    return QueryHandler.getAllWithJoin(PROVISIONED_OBJECTS_TABLE, CREDENTIAL_TABLE, CREDENTIAL_ID_KEY)
       .onSuccess(result ->
       {
         LOGGER.info("Received object  from DB: " + (result != null ? result.size() : 0));
@@ -149,18 +204,15 @@ public class Utils
         objectQueue.clear(); // Clear the existing queue before updating
         for (JsonObject obj : result)
         {
-          if(obj.getString(PROVISIONING_STATUS_KEY).equals("pending"))
-            continue;
+          var credentialDataPayload = new JsonObject(obj.getString(CREDENTIAL_DATA_KEY));
 
-          JsonObject filteredObject = new JsonObject()
-            .put(IP_KEY, obj.getJsonObject("object_data").getString(IP_KEY))
-            .put(PORT_KEY, obj.getJsonObject("object_data").getString(PORT_KEY))
-            .put(PASSWORD_KEY, obj.getJsonObject("object_data").getString(PASSWORD_KEY))
-            .put(USERNAME_KEY, obj.getJsonObject("object_data").getString(USERNAME_KEY))
-            .put(PLUGIN_ENGINE_TYPE_KEY, obj.getJsonObject("object_data").getString(PLUGIN_ENGINE_TYPE_KEY))
+          JsonObject filteredObject = new JsonObject().put(IP_KEY, obj.getString(IP_KEY))
+            .put(PORT_KEY, PORT_VALUE)
+            .put(PASSWORD_KEY, credentialDataPayload.getString(PASSWORD_KEY))
+            .put(USERNAME_KEY, credentialDataPayload.getString(USERNAME_KEY))
+            .put(PLUGIN_ENGINE_TYPE_KEY, PLUGIN_ENGINE_LINUX)
             .put(OBJECT_ID_KEY, obj.getInteger(OBJECT_ID_KEY))
-            .put(LAST_POLL_TIME_KEY, obj.getLong(LAST_POLL_TIME_KEY))
-            .put(PROVISIONING_STATUS_KEY, obj.getString(PROVISIONING_STATUS_KEY))
+            .put(LAST_POLL_TIME_KEY, System.currentTimeMillis())
             .put(POLL_INTERVAL_KEY, obj.getInteger(POLL_INTERVAL_KEY));
 
           objectQueue.add(filteredObject);
@@ -181,61 +233,6 @@ public class Utils
       .filter(obj -> obj.getInteger(OBJECT_ID_KEY) == objectId)
       .findFirst()
       .ifPresent(obj -> obj.put(LAST_POLL_TIME_KEY, lastPollTIME));
-  }
-
-  // get CounterObject from pollingdataCache
-  public static JsonArray getPollDataFromCache(String objectId)
-  {
-    JsonArray resultArray = new JsonArray();
-
-    pollingDataCache.stream()
-      .filter(obj -> objectId.equals(obj.getString(OBJECT_ID_KEY)))
-      .forEach(resultArray::add);
-
-    return resultArray;
-  }
-
-  // add pollResponce in cache
-  public static void addPollingResponse(JsonObject pollResponsePayload)
-  {
-    if (pollResponsePayload == null)
-    {
-      LOGGER.warning("Attempted to add a null JsonObject to pollingDataCache.");
-      return;
-    }
-
-    // added polling responce in PollingdataCache
-    pollingDataCache.add(pollResponsePayload);
-
-    LOGGER.info("Added polling response to pollingDataCache: " + pollResponsePayload.encode());
-  }
-
-  // update pollingDataCache from database
-  public static Future<Object> updatePollingDataCacheFromDatabase()
-  {
-    return QueryHandler.getAll(POLLING_RESULTS_TABLE)
-      .map(jsonList ->
-      {
-        LOGGER.info("Received polling data from DB: " + (jsonList != null ? jsonList.size() : 0));
-
-        if (jsonList != null && !jsonList.isEmpty())
-        {
-          pollingDataCache.clear();
-          pollingDataCache.addAll(jsonList);
-          LOGGER.info("Polling data cache updated successfully");
-        }
-        else
-        {
-          LOGGER.info("No polling data found in the database.");
-        }
-        return null; // ✅ Convert to `Void`
-      }).
-      mapEmpty()
-      .onFailure(err ->
-      {
-        LOGGER.severe("Failed to update polling data cache: " + err.getMessage());
-        err.printStackTrace();
-      });
   }
 
   // validate payload
@@ -276,15 +273,15 @@ public class Utils
       return response;
     }
 
-    if (!payload.containsKey(IPS_KEY) || !(payload.getValue(IPS_KEY) instanceof JsonArray) || payload.getJsonArray(IPS_KEY).isEmpty())
+    if (!payload.containsKey(IP_KEY) || !(payload.getValue(IP_KEY) instanceof String) || payload.getString(IP_KEY).trim().isEmpty())
     {
       response.put(IS_VALID_KEY, "false");
-      response.put(IPS_ERROR, "Invalid or missing 'IP' address");
+      response.put(IP_ERROR, "Invalid or missing 'IP' address");
     }
-    else if (!isValidIPSAddress(payload.getJsonArray(IPS_KEY)))
+    else if (!isValidIPSAddress(payload.getString(IP_KEY)))
     {
       response.put(IS_VALID_KEY, "false");
-      response.put(IPS_ERROR, "IP address format is invalid");
+      response.put(IP_ERROR, "IP address format is invalid");
     }
 
     if (!payload.containsKey("port") || !(payload.getValue("port") instanceof Integer))
@@ -296,21 +293,6 @@ public class Utils
     {
       response.put(IS_VALID_KEY, "false");
       response.put(PORT_ERROR, "Port must be between 0 and 65535");
-    }
-
-    if (!payload.containsKey(OBJECT_TYPE_KEY) || !(payload.getValue(OBJECT_TYPE_KEY) instanceof String) || payload.getString(OBJECT_TYPE_KEY).trim().isEmpty())
-    {
-      response.put(IS_VALID_KEY, "false");
-      response.put(TYPE_ERROR, "Invalid or missing 'type'");
-    }
-    else
-    {
-      String type = payload.getString(OBJECT_TYPE_KEY).trim().toLowerCase();
-      if (!type.equals("linux") && !type.equals("windows") && !type.equals("snmp"))
-      {
-        response.put(IS_VALID_KEY, "false");
-        response.put(TYPE_ERROR, "Type must be one of: 'linux', 'windows', or 'snmp'");
-      }
     }
 
     if (!payload.containsKey(CREDENTIAL_ID_KEY) || !(payload.getValue(CREDENTIAL_ID_KEY) instanceof Integer))
@@ -335,15 +317,33 @@ public class Utils
       return response;
     }
 
-    if (!(payload.containsKey(USERNAME_KEY) && payload.getValue(USERNAME_KEY) instanceof String && !payload.getString(USERNAME_KEY).trim().isEmpty()))
+    if (!(payload.containsKey(CREDENTIAL_NAME_KEY) && payload.getValue(CREDENTIAL_NAME_KEY) instanceof String && !payload.getString(CREDENTIAL_NAME_KEY).trim().isEmpty()))
     {
       response.put(IS_VALID_KEY, "false");
-      response.put(USERNAME_ERROR, "Invalid or missing 'username'");
+      response.put(CREDENTIAL_NAME_ERROR, "Invalid or missing 'CredentialName'");
     }
-    if (!(payload.containsKey(PASSWORD_KEY) && payload.getValue(PASSWORD_KEY) instanceof String && !payload.getString(PASSWORD_KEY).trim().isEmpty()))
+
+    if (!(payload.containsKey(SYSTEM_TYPE_KEY) && payload.getValue(SYSTEM_TYPE_KEY) instanceof String && !payload.getString(SYSTEM_TYPE_KEY).trim().isEmpty()))
     {
       response.put(IS_VALID_KEY, "false");
-      response.put(PASSWORD_ERROR, "Invalid or missing 'password'");
+      response.put(SYSTEM_TYPE_ERROR, "Invalid or missing 'SystemType'");
+    }
+
+    if(payload.containsKey(CREDENTIAL_DATA_KEY))
+    {
+        var credentialDataPayload = payload.getJsonObject(CREDENTIAL_DATA_KEY);
+
+        if (!(credentialDataPayload.containsKey(USERNAME_KEY) && credentialDataPayload.getValue(USERNAME_KEY) instanceof String && !credentialDataPayload.getString(USERNAME_KEY).trim().isEmpty()))
+        {
+          response.put(IS_VALID_KEY, "false");
+          response.put(USERNAME_ERROR, "Invalid or missing 'CredentialUsername'");
+        }
+
+        if (!(credentialDataPayload.containsKey(PASSWORD_KEY) && credentialDataPayload.getValue(PASSWORD_KEY) instanceof String && !credentialDataPayload.getString(PASSWORD_KEY).trim().isEmpty()))
+        {
+          response.put(IS_VALID_KEY, "false");
+          response.put(PASSWORD_ERROR, "Invalid or missing 'CredentialPassword'");
+        }
     }
 
     return response;
@@ -362,10 +362,15 @@ public class Utils
       return response;
     }
 
-    if (!payload.containsKey(OBJECT_ID_KEY) || !(payload.getValue(OBJECT_ID_KEY) instanceof Integer))
+    if (!payload.containsKey(IP_KEY) || !(payload.getValue(IP_KEY) instanceof String))
     {
       response.put(IS_VALID_KEY, "false");
-      response.put("objectIdError", "Invalid or missing 'discovery_id'");
+      response.put(IP_ERROR, "Invalid or missing 'ip'");
+    }
+    else if (!isValidIPSAddress(payload.getString(IP_KEY)))
+    {
+      response.put(IS_VALID_KEY, "false");
+      response.put(IP_ERROR, "IP address format is invalid");
     }
 
     if (!payload.containsKey(POLL_INTERVAL_KEY) || !(payload.getValue(POLL_INTERVAL_KEY) instanceof Integer))
@@ -394,19 +399,11 @@ public class Utils
   }
 
   // Validate IP Address (Both IPv4 & IPv6)
-  private static boolean isValidIPSAddress(JsonArray ips)
+  private static boolean isValidIPSAddress(String ip)
   {
     var ipRegex = "^((25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)$";
 
-    for (int i = 0; i < ips.size(); i++)
-    {
-      String ip = ips.getString(i);
-      if (!Pattern.compile(ipRegex).matcher(ip).matches())
-      {
-        return false;
-      }
-    }
-    return true;
+    return Pattern.compile(ipRegex).matcher(ip).matches();
   }
 
   // format invalid response and return response
@@ -417,4 +414,28 @@ public class Utils
       .map(entry -> entry.getKey() + ": " + entry.getValue())
       .collect(Collectors.joining(", "));
   }
+
+  public static JsonObject replaceUnderscoreWithDot(JsonObject input)
+  {
+    JsonObject output = new JsonObject();
+    for (Map.Entry<String, Object> entry : input)
+    {
+      String newKey = entry.getKey().replace("_", ".");
+      output.put(newKey, entry.getValue());
+    }
+    return output;
+  }
+
+
+  public static String getIdColumnByTable(String tableName)
+  {
+    return switch (tableName)
+    {
+      case CREDENTIAL_TABLE -> CREDENTIAL_ID_KEY;
+      case DISCOVERY_TABLE -> DISCOVERY_ID_KEY;
+      case PROVISIONED_OBJECTS_TABLE -> OBJECT_ID_KEY;
+      default -> ID_KEY; // fallback generic ID column
+    };
+  }
+
 }

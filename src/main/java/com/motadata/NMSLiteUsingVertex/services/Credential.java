@@ -10,7 +10,6 @@ import io.vertx.ext.web.RoutingContext;
 import java.util.logging.Logger;
 
 import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
-import static com.motadata.NMSLiteUsingVertex.utils.Constants.CREDENTIAL_TABLE;
 import static com.motadata.NMSLiteUsingVertex.utils.Utils.formatInvalidResponse;
 
 public class Credential
@@ -27,7 +26,7 @@ public class Credential
 
     if (payloadValidationResult.get(IS_VALID_KEY).equals("false"))
     {
-      var errorResponse = Utils.createResponse("error", formatInvalidResponse(payloadValidationResult));
+      var errorResponse = Utils.createResponse(STATUS_RESPONSE_ERROR, formatInvalidResponse(payloadValidationResult));
 
       ctx.response().setStatusCode(400).end(errorResponse.encodePrettily());
 
@@ -41,7 +40,7 @@ public class Credential
       {
         LOGGER.info("Credential saved successfully");
 
-        var response = Utils.createResponse("success", "Credential saved successfully.");
+        var response = Utils.createResponse(STATUS_RESPONSE_SUCCESS, "Credential saved successfully.");
 
         ctx.response().setStatusCode(201).end(response.encodePrettily());
       })
@@ -49,7 +48,9 @@ public class Credential
       {
         LOGGER.severe("Failed to save credential: " + err.getMessage());
 
-        var response = Utils.createResponse("error", "Failed to save credential: " + err.getMessage());
+        var errorMessage = (err.getMessage() != null && err.getMessage().contains("duplicate key value")) ? "Try with a different name, this name is already used by another credential" : "Failed to save credential";
+
+        var response = Utils.createResponse(STATUS_RESPONSE_ERROR, errorMessage);
 
         ctx.response().setStatusCode(500).end(response.encodePrettily());
       });
@@ -73,7 +74,7 @@ public class Credential
       {
         LOGGER.severe("Failed to fetch credentials: " + err.getMessage());
 
-        var response = Utils.createResponse("error", "Failed to fetch credentials: " + err.getMessage());
+        var response = Utils.createResponse(STATUS_RESPONSE_ERROR, "Failed to fetch credentials: " + err.getMessage());
 
         ctx.response().setStatusCode(500).end(response.encodePrettily());
       });
@@ -88,7 +89,7 @@ public class Credential
     {
       LOGGER.warning("Invalid credential id received: " + id);
 
-      var response = Utils.createResponse("failed", "Invalid credential id: Id cannot be empty");
+      var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid credential id: Id cannot be empty");
 
       ctx.response().setStatusCode(400).end(response.encodePrettily());
 
@@ -104,7 +105,7 @@ public class Credential
         {
           LOGGER.warning("Credential not found: " + id);
 
-          var response = Utils.createResponse("failed", "Credential not found");
+          var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Credential not found");
 
           ctx.response().setStatusCode(404).end(response.encodePrettily());
         }
@@ -119,7 +120,7 @@ public class Credential
       {
         LOGGER.severe("Failed to find credential: " + err.getMessage());
 
-        var response = Utils.createResponse("failed", "Credential not found");
+        var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Credential not found");
 
         ctx.response().setStatusCode(500).end(response.encodePrettily());
       });
@@ -128,13 +129,13 @@ public class Credential
   // handle update credential
   public static void updateCredential(RoutingContext ctx)
   {
-    var id = ctx.pathParam(ID_HEADER_PATH);
+    var credentialId = ctx.pathParam(ID_HEADER_PATH);
 
-    if (id == null || id.trim().isEmpty())
+    if (credentialId == null || credentialId.trim().isEmpty())
     {
-      LOGGER.warning("Invalid credential id received: " + id);
+      LOGGER.warning("Invalid credential id received: " + credentialId);
 
-      var response = Utils.createResponse("failed", "Invalid credential id: id cannot be empty");
+      var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid credential id: id cannot be empty");
 
       ctx.response().setStatusCode(400).end(response.encodePrettily());
 
@@ -147,28 +148,30 @@ public class Credential
     {
       LOGGER.warning("payload is empty");
 
-      var response = Utils.createResponse("failed", "Invalid payload: payload is empty");
+      var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid payload: payload is empty");
 
       ctx.response().setStatusCode(400).end(response.encodePrettily());
       return;
     }
 
-    LOGGER.info("Updating credential for id: " + id);
+    LOGGER.info("Updating credential for id: " + credentialId);
 
-    QueryHandler.updateByField(CREDENTIAL_TABLE, payload, "credential_id", id)
+    QueryHandler.updateByField(CREDENTIAL_TABLE, payload, CREDENTIAL_ID_KEY, credentialId)
       .onSuccess(v ->
       {
-        LOGGER.info("Credential updated successfully for id: " + id);
+        LOGGER.info("Credential updated successfully for id: " + credentialId);
 
-        var response = Utils.createResponse("success", "Credential updated successfully");
+        var response = Utils.createResponse(STATUS_RESPONSE_SUCCESS, "Credential updated successfully");
 
         ctx.response().setStatusCode(200).end(response.encodePrettily());
       })
       .onFailure(err ->
       {
-        LOGGER.severe("Failed to update credential: " + err.getMessage());
+        LOGGER.severe("Failed to save credential: " + err.getMessage());
 
-        var response = Utils.createResponse("error", "Failed to update credential: " + err.getMessage());
+        var errorMessage = (err.getMessage() != null && err.getMessage().contains("duplicate key value")) ? "Try with a different name, this name is already used by another credential" : "Failed to save credential";
+
+        var response = Utils.createResponse(STATUS_RESPONSE_ERROR, errorMessage);
 
         ctx.response().setStatusCode(500).end(response.encodePrettily());
       });
@@ -178,31 +181,22 @@ public class Credential
   public static void deleteCredential(RoutingContext ctx)
   {
     var credentialId = ctx.pathParam(ID_KEY);
+
     QueryHandler.deleteById(CREDENTIAL_TABLE, credentialId)
-      .onSuccess(deleted ->
+      .onSuccess(deletedStatus ->
       {
-        if (deleted)
-        {
-          LOGGER.info("Credential deleted successfully");
+        var statusMsg = deletedStatus ? "Credential deleted successfully" : "No matching record found";
+        LOGGER.info(statusMsg);
 
-          var response = new JsonObject().put("status", "success").put("statusMsg", "Credential deleted successfully");
+        var response = new JsonObject().put("status", "success").put("statusMsg", statusMsg);
 
-          ctx.response().setStatusCode(200).end(response.encodePrettily());
-        }
-        else
-        {
-          LOGGER.info("No matching record found");
-
-          var response = new JsonObject().put("status", "success").put("statusMsg", "No matching record found");
-
-          ctx.response().setStatusCode(200).end(response.encodePrettily());
-        }
+        ctx.response().setStatusCode(200).end(response.encodePrettily());
       })
       .onFailure(err ->
       {
         LOGGER.severe("Database query failed: " + err.getMessage());
 
-        var response = Utils.createResponse("error", "Database query failed");
+        var response = Utils.createResponse(STATUS_RESPONSE_ERROR, "Database query failed");
 
         ctx.response().setStatusCode(500).end(response.encodePrettily());
       });

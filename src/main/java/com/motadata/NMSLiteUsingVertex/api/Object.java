@@ -2,6 +2,7 @@ package com.motadata.NMSLiteUsingVertex.api;
 
 import com.motadata.NMSLiteUsingVertex.Main;
 import com.motadata.NMSLiteUsingVertex.database.QueryHandler;
+import com.motadata.NMSLiteUsingVertex.services.ObjectManager;
 import com.motadata.NMSLiteUsingVertex.utils.AppLogger;
 import com.motadata.NMSLiteUsingVertex.utils.Utils;
 import io.vertx.core.Future;
@@ -17,9 +18,10 @@ import static com.motadata.NMSLiteUsingVertex.utils.Utils.formatInvalidResponse;
 
 public class Object
 {
-  private  static final Router router = Router.router(Main.vertx());
+  private static final Router router = Router.router(Main.vertx());
 
-  private static final Logger LOGGER = AppLogger.getLogger();
+//  private static final Logger LOGGER = AppLogger.getLogger();
+  private static final Logger LOGGER =  Logger.getLogger(Object.class.getName());
 
   // return subrouter for object
   public static Router getRouter()
@@ -49,43 +51,53 @@ public class Object
 
     var payloadValidationResult = Utils.isValidPayload(PROVISIONED_OBJECTS_TABLE, payload);
 
-    if (payloadValidationResult.get("isValid").equals("false"))
+    if (payloadValidationResult.get(IS_VALID_KEY).equals("false"))
     {
-      var errorResponse = Utils.createResponse("error", formatInvalidResponse(payloadValidationResult));
+      var errorResponse = Utils.createResponse(STATUS_RESPONSE_ERROR, formatInvalidResponse(payloadValidationResult));
+
       ctx.response().setStatusCode(400).end(errorResponse.encodePrettily());
       return;
     }
 
-    var objectId = payload.getInteger(OBJECT_ID_KEY);
-
-    QueryHandler.getById(PROVISIONED_OBJECTS_TABLE, String.valueOf(objectId))
-      .compose( objectRecord ->
-      {
-        if(objectRecord.getString(PROVISIONING_STATUS_KEY).equals("pending"))
+    QueryHandler.getByField(PROVISIONED_OBJECTS_TABLE, IP_KEY, payload.getString(IP_KEY))
+        .onSuccess(provisionRecord ->
         {
-          return ctx.vertx().eventBus().request(PROVISION_EVENT, payload);
-        }
-        else
-        {
-          return Future.failedFuture("object provisioning is already completed");
-        }
-      })
-        .onSuccess(replybody ->
-        {
-          var response = (JsonObject) replybody.body();
+          if(provisionRecord != null)
+          {
+            LOGGER.severe("Object is already Provisioned & perform");
 
-          LOGGER.info("Provisioning successful: " + response);
+            var response = Utils.createResponse(STATUS_RESPONSE_SUCCESS, "Object is already Provisioned & perform");
 
-          ctx.response().setStatusCode(201).end(response.encodePrettily());
+            ctx.response().setStatusCode(200).end(response.encodePrettily());
+            return;
+          }
+
+          ctx.vertx().eventBus().<JsonObject>request(PROVISION_EVENT, payload)
+            .onSuccess(replybody ->
+            {
+              var response = replybody.body();
+
+              LOGGER.info("Provisioning successful: " + response);
+
+              ctx.response().setStatusCode(201).end(response.encodePrettily());
+            })
+            .onFailure(err ->
+            {
+              LOGGER.severe("Provisioning failed: " + err.getMessage());
+
+              var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Provisioning failed");
+
+              ctx.response().setStatusCode(400).end(response.encodePrettily());
+            });
         })
-        .onFailure(err->
+        .onFailure(err ->
         {
-          LOGGER.severe("Provisioning failed: " + err.getMessage());
+        LOGGER.severe("database query failed: " + err.getMessage());
 
-          var response = Utils.createResponse("failed", "Provisioning failed");
+        var response = Utils.createResponse(STATUS_RESPONSE_ERROR, "database query failed");
 
-          ctx.response().setStatusCode(400).end(response.encodePrettily());
-        });
+        ctx.response().setStatusCode(500).end(response.encodePrettily());
+      });
   }
 
   // handle pollingData
@@ -97,24 +109,30 @@ public class Object
     {
       LOGGER.warning("Invalid objectId id received: " + objectId);
 
-      var response = Utils.createResponse("failed", "Invalid objectId id: Id cannot be empty");
+      var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid objectId id: Id cannot be empty");
 
       ctx.response().setStatusCode(400).end(response.encodePrettily());
       return;
     }
 
-    var responseArray = Utils.getPollDataFromCache(objectId);
+    QueryHandler.getAllByField(POLLING_RESULTS_TABLE, OBJECT_ID_KEY, Integer.parseInt(objectId))
+      .onSuccess(pollingRecords ->
+      {
+        var response = new JsonArray(pollingRecords);
 
-    if (responseArray != null)
-    {
-      LOGGER.info("fetch Polling data successfull");
-    }
-    else
-    {
-      LOGGER.severe("fetch Polling is successfull but Empty");
-    }
-    ctx.response().setStatusCode(200).end(responseArray.encodePrettily());
-  }
+        LOGGER.info("Object Polling data fetched successfully");
+
+        ctx.response().setStatusCode(200).end(response.encodePrettily());
+      })
+      .onFailure(err ->
+      {
+        LOGGER.severe("Failed to fetch provision data: " + err.getMessage());
+
+        var response = Utils.createResponse(STATUS_RESPONSE_ERROR, "Failed to fetch Object Polling data");
+
+        ctx.response().setStatusCode(500).end(response.encodePrettily());
+      });
+}
 
   // handle send all objects data
   private static void getAllObjects(RoutingContext ctx)
@@ -134,7 +152,7 @@ public class Object
       {
         LOGGER.severe("Failed to fetch objects: " + err.getMessage());
 
-        var response = Utils.createResponse("error", "Failed to fetch objects: " + err.getMessage());
+        var response = Utils.createResponse(STATUS_RESPONSE_ERROR, "Failed to fetch objects: " + err.getMessage());
 
         ctx.response().setStatusCode(500).end(response.encodePrettily());
       });
@@ -145,11 +163,10 @@ public class Object
   {
     var objectId = ctx.pathParam(OBJECT_ID_HEADER_PATH);
 
-    if (objectId == null || objectId.trim().isEmpty())
-    {
+    if (objectId == null || objectId.trim().isEmpty()) {
       LOGGER.warning("Invalid object id received: " + objectId);
 
-      var response = Utils.createResponse("failed", "Invalid object id: Id cannot be empty");
+      var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid object id: Id cannot be empty");
 
       ctx.response().setStatusCode(400).end(response.encodePrettily());
 
@@ -161,11 +178,10 @@ public class Object
     QueryHandler.getByField(PROVISIONED_OBJECTS_TABLE, OBJECT_ID_KEY, objectId)
       .onSuccess(object ->
       {
-        if (object == null)
-        {
+        if (object == null) {
           LOGGER.warning("Object not found: " + objectId);
 
-          var response = Utils.createResponse("failed", "object not found");
+          var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "object not found");
 
           ctx.response().setStatusCode(404).end(response.encodePrettily());
         }
@@ -180,7 +196,7 @@ public class Object
       {
         LOGGER.severe("Failed to find object: " + err.getMessage());
 
-        var response = Utils.createResponse("failed", "object not found");
+        var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "object not found");
 
         ctx.response().setStatusCode(500).end(response.encodePrettily());
       });
@@ -195,7 +211,7 @@ public class Object
     {
       LOGGER.warning("Invalid object id received: " + objectId);
 
-      var response = Utils.createResponse("failed", "Invalid object id: Id cannot be empty");
+      var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid object id: Id cannot be empty");
 
       ctx.response().setStatusCode(400).end(response.encodePrettily());
       return;
@@ -206,16 +222,13 @@ public class Object
     QueryHandler.deleteById(PROVISIONED_OBJECTS_TABLE, objectId)
       .onSuccess(deleted ->
       {
-        if (deleted)
-        {
+        if (deleted) {
           LOGGER.info("Object deleted successfully");
 
-          var response = new JsonObject().put("status", "success").put("statusMsg", "Object deleted successfully");
+          var response = new JsonObject().put(STATUS_KEY, STATUS_RESPONSE_SUCCESS).put(STATUS_MSG_KEY, "Object deleted successfully");
 
           ctx.response().setStatusCode(200).end(response.encodePrettily());
-        }
-        else
-        {
+        } else {
           LOGGER.info("No matching record found");
 
           var response = new JsonObject().put("status", "success").put("statusMsg", "No matching record found");
@@ -227,7 +240,7 @@ public class Object
       {
         LOGGER.severe("Database query failed: " + err.getMessage());
 
-        var response = Utils.createResponse("error", "Database query failed");
+        var response = Utils.createResponse(STATUS_RESPONSE_ERROR, "Database query failed");
 
         ctx.response().setStatusCode(500).end(response.encodePrettily());
       });

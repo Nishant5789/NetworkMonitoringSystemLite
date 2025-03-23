@@ -16,19 +16,27 @@ public class Constants
 
   public static final String PROVISION_EVENT = "provision";
 
+  public static final String ZMQ_REQUEST_EVENT = "zmq_request";
+
   public static final String POLLING_EVENT = "polling";
 
   public static final String ID_HEADER_PATH = "id";
 
   public static final String OBJECT_ID_HEADER_PATH = "object_id";
 
-  public static final String DISCOVERY_ID_HEADER_PATH = "discovery_id";
+  public static final String CREDENTIAL_NAME_KEY = "credential_name";
+
+  public static final String SYSTEM_TYPE_KEY = "system_type";
+
+  public static final String CREDENTIAL_DATA_KEY = "credential_data";
 
   public static final String USERNAME_KEY = "username";
 
   public static final String PASSWORD_KEY = "password";
 
   public static final String ID_KEY = "id";
+
+  public static final String METRICS_DATA_KEY = "data";
 
   public static final String REQUEST_ID = "request_id";
 
@@ -52,32 +60,47 @@ public class Constants
 
   public static final String DISCOVERY_STATUS_KEY = "discovery_status";
 
+  public static final String STATUS_KEY = "status";
+
+  public static final String STATUS_COMPLETED = "completed";
+
+  public static final String STATUS_PENDING = "pending";
+
+  public static final String STATUS_MSG_KEY = "statusMsg";
+
   public static final String PROVISIONING_STATUS_KEY = "provisioning_status";
 
-  public static final String IPS_KEY = "ips";
+  public static final String PORT_KEY = "port";
+
+  public static final String PORT_VALUE = "22";
 
   public static final String IP_KEY = "ip";
-
-  public static final String OBJECT_TYPE_KEY = "type";
-
-  public static final String PORT_KEY = "port";
 
   public static final String EVENT_NAME_KEY = "event_name";
 
   public static final String PLUGIN_ENGINE_TYPE_KEY = "plugin_engine";
 
-  public static final String USERNAME_ERROR = "usernameError";
+  public static final String PLUGIN_ENGINE_LINUX = "linux";
 
-  public static final String PASSWORD_ERROR = "passwordError";
+  public static final String CREDENTIAL_NAME_ERROR = "credential_name_error";
 
-  public static final String IPS_ERROR = "ipsError";
+  public static final String SYSTEM_TYPE_ERROR = "system_type_error";
 
-  public static final String PORT_ERROR = "portError";
+  public static final String USERNAME_ERROR = "username_error";
 
-  public static final String TYPE_ERROR = "typeEroor";
+  public static final String PASSWORD_ERROR = "password_error";
 
-  public static final String CREDENTIAL_ID_ERROR = "credentialIdError";
+  public static final String IP_ERROR = "ip_error";
 
-  public static final String POLLINTERVAL_ERROR = "pollIntervalError";
+  public static final String PORT_ERROR = "port_error";
 
+  public static final String CREDENTIAL_ID_ERROR = "credential_id_error";
+
+  public static final String POLLINTERVAL_ERROR = "pollInterval_error";
+
+  public static final String STATUS_RESPONSE_ERROR = "error";
+
+  public static final String STATUS_RESPONSE_FAIIED = "failed";
+
+  public static final String STATUS_RESPONSE_SUCCESS = "success";
 }

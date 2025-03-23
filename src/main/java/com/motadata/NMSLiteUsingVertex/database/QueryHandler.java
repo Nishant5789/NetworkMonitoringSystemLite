@@ -1,11 +1,16 @@
 package com.motadata.NMSLiteUsingVertex.database;
 
+import com.motadata.NMSLiteUsingVertex.utils.Utils;
 import io.vertx.core.Future;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.sqlclient.Pool;
 import io.vertx.sqlclient.Row;
 import io.vertx.sqlclient.Tuple;
+import org.postgresql.util.PGobject;
+
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -32,17 +37,27 @@ public class QueryHandler
     for (Map.Entry<String, Object> entry : payload.getMap().entrySet())
     {
       String column = entry.getKey();
+      Object value = entry.getValue();
 
       columns.append(column);
-
       placeholders.append("$").append(index++);
 
-      tuple.addValue(entry.getValue() instanceof List ? new JsonArray((List<?>) entry.getValue()).encode() : entry.getValue());
+      if (value instanceof Map)
+      {
+        tuple.addValue(new JsonObject((Map<String, Object>) value).encode()); // Manual wrap avoids JsonObject.mapFrom()
+      }
+      else if (value instanceof List)
+      {
+        tuple.addValue(new JsonArray((List<?>) value).encode());
+      }
+      else
+      {
+        tuple.addValue(value);
+      }
 
       if (index <= payload.size())
       {
         columns.append(", ");
-
         placeholders.append(", ");
       }
     }
@@ -111,14 +126,7 @@ public class QueryHandler
   // Generalized Find by ID
   public static Future<JsonObject> getById(String tableName, String id)
   {
-    String tableId = switch (tableName)
-    {
-      case CREDENTIAL_TABLE -> CREDENTIAL_ID_KEY;
-      case DISCOVERY_TABLE -> DISCOVERY_ID_KEY;
-      case PROVISIONED_OBJECTS_TABLE -> OBJECT_ID_KEY;
-      default -> ID_KEY;
-    };
-    return getByField(tableName, tableId, id);
+    return getByField(tableName, Utils.getIdColumnByTable(tableName), id);
   }
 
   // Generalized UPDATE : find by field & update
@@ -135,10 +143,18 @@ public class QueryHandler
     for (Map.Entry<String, Object> entry : payload.getMap().entrySet())
     {
       var column = entry.getKey();
+      var value = entry.getValue();
 
       setClause.append(column).append(" = $").append(index++);
 
-      tuple.addValue(entry.getValue());
+      if (value instanceof Map)
+      {
+        tuple.addValue(new JsonObject((Map<String, Object>) value).encode());
+      }
+      else
+      {
+        tuple.addValue(value);
+      }
 
       if (index <= payload.size())
       {
@@ -176,5 +192,93 @@ public class QueryHandler
     return pool.preparedQuery(query)
       .execute(params)
       .map(rows -> rows.rowCount() > 0);
+  }
+
+  // Genralized find by ID Using join
+  public static Future<JsonObject> getByFieldWithJoin(String tableName1, String tableName2, String joiningOnField, String fieldName, String fieldValue)
+  {
+    var query = "SELECT t1.*, t2.* " + "FROM " + tableName1 + " t1 " + "JOIN " + tableName2 + " t2 " + "ON t1." + joiningOnField + " = t2." + joiningOnField + " " + "WHERE t1." + fieldName + " = $1";
+
+    return pool.preparedQuery(query)
+      .execute(Tuple.of(fieldValue))
+      .map(rows ->
+      {
+        if (rows.size() == 0) return null;
+
+        Row row = rows.iterator().next();
+
+        JsonObject obj = new JsonObject();
+
+        for (int i = 0; i < row.size(); i++)
+        {
+          String column = row.getColumnName(i);
+          Object val = row.getValue(i);
+          obj.put(column, val);
+        }
+        return obj;
+      });
+  }
+
+  public static Future<List<JsonObject>> getAllWithJoin(String tableName1, String tableName2, String joiningOnField)
+  {
+    var query = "SELECT t1.*, t2.* " + "FROM " + tableName1 + " t1 " + "JOIN " + tableName2 + " t2 " + "ON t1." + joiningOnField + " = t2." + joiningOnField;
+
+    return pool.preparedQuery(query)
+      .execute()
+      .map(rows ->
+      {
+        List<JsonObject> resultList = new ArrayList<>();
+
+        for (Row row : rows)
+        {
+          JsonObject obj = new JsonObject();
+
+          for (int i = 0; i < row.size(); i++)
+          {
+            String column = row.getColumnName(i);
+            Object val = row.getValue(i);
+            obj.put(column, val);
+          }
+          resultList.add(obj);
+        }
+        return resultList;
+      });
+  }
+
+  public static Future<List<JsonObject>> getAllByField(String tableName, String fieldName, Object fieldValue)
+  {
+    var query = String.format("SELECT * FROM %s WHERE %s = $1", tableName, fieldName);
+
+    return pool.preparedQuery(query)
+      .execute(Tuple.of(fieldValue))
+      .map(rows ->
+      {
+        List<JsonObject> resultList = new ArrayList<>();
+
+        if (rows.size() == 0) return resultList;
+
+        for (Row row : rows)
+        {
+          JsonObject obj = new JsonObject();
+
+          for (int i = 0; i < row.size(); i++)
+          {
+            String column = row.getColumnName(i);
+            Object val = row.getValue(i);
+
+            if (val instanceof PGobject pgObject && "jsonb".equalsIgnoreCase(pgObject.getType()))
+            {
+              val = new JsonObject(pgObject.getValue());
+            }
+            else if (val instanceof OffsetDateTime offsetDateTime)
+            {
+              val = offsetDateTime.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+            }
+            obj.put(column, val);
+          }
+          resultList.add(obj);
+        }
+        return resultList;
+      });
   }
 }

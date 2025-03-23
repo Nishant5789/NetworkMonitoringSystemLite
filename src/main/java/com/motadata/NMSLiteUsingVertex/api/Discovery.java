@@ -5,6 +5,7 @@ import com.motadata.NMSLiteUsingVertex.database.QueryHandler;
 import com.motadata.NMSLiteUsingVertex.utils.AppLogger;
 import com.motadata.NMSLiteUsingVertex.utils.Utils;
 import io.vertx.core.Future;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
@@ -23,16 +24,95 @@ public class Discovery
   // return subroutes for discovery
   public static Router getRouter()
   {
+    // GET /api/discovery - get All discovery
+    router.get("/").handler(Discovery::getAllDiscovery);
+
+    // GET /api/discovery - get All discovery
+    router.get("/:id").handler(Discovery::getDiscoveryByID);
+
     // POST /api/discovery - added discovery
     router.post("/").handler(Discovery::addedDiscovery);
+
+    // PUT  /api/discovery - update discovery
+    router.put("/:id").handler(Discovery::updateDiscovery);
 
     // GET /api/run/ - run discovery
     router.post("/run").handler(Discovery::handleRunDiscovery);
 
     // DELETE /api/:discoveryId - delete discovery
-    router.delete("/:discovery_id").handler(Discovery::deleteDiscovery);
+    router.delete("/:id").handler(Discovery::deleteDiscovery);
 
     return router;
+  }
+
+  // handle get discovery By Id
+  private static void getDiscoveryByID(RoutingContext ctx)
+  {
+    var credentialId = ctx.pathParam(ID_KEY);
+
+    if (credentialId == null || credentialId.trim().isEmpty())
+    {
+      LOGGER.warning("Invalid discovery id received: " + credentialId);
+
+      var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid discovery id: Id cannot be empty");
+
+      ctx.response().setStatusCode(400).end(response.encodePrettily());
+
+      return;
+    }
+
+    LOGGER.info("Finding discovery by id: " + credentialId);
+
+    QueryHandler.getByField(DISCOVERY_TABLE, DISCOVERY_ID_KEY, credentialId)
+      .onSuccess(discoveryRecord ->
+      {
+        if (discoveryRecord == null)
+        {
+          LOGGER.warning("Credential not found: " + credentialId);
+
+          var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Credential not found");
+
+          ctx.response().setStatusCode(404).end(response.encodePrettily());
+        }
+        else
+        {
+          LOGGER.info("Found discovery: " + discoveryRecord);
+
+          ctx.response().end(discoveryRecord.encodePrettily());
+        }
+      })
+      .onFailure(err ->
+      {
+        LOGGER.severe("Failed to find discovery: " + err.getMessage());
+
+        var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Credential not found");
+
+        ctx.response().setStatusCode(500).end(response.encodePrettily());
+      });
+  }
+
+  // handle get all discovery
+  private static void getAllDiscovery(RoutingContext ctx)
+  {
+    LOGGER.info("Fetching all discovery");
+
+    QueryHandler.getAll(DISCOVERY_TABLE)
+      .onSuccess(discoveryRecords ->
+      {
+        LOGGER.info("Fetched discovery successfully");
+
+        var response = new JsonArray(discoveryRecords);
+
+        ctx.response().end(response.encodePrettily());
+      })
+      .onFailure(err ->
+      {
+        LOGGER.severe("Failed to fetch discovery: " + err.getMessage());
+
+        var response = Utils.createResponse(STATUS_RESPONSE_ERROR, "Failed to fetch discovery");
+
+        ctx.response().setStatusCode(500).end(response.encodePrettily());
+      });
   }
 
   // handle added discovery
@@ -44,7 +124,7 @@ public class Discovery
 
     if (payloadValidationResult.get(IS_VALID_KEY).equals("false"))
     {
-      var errorResponse = Utils.createResponse("error", formatInvalidResponse(payloadValidationResult));
+      var errorResponse = Utils.createResponse(STATUS_RESPONSE_ERROR, formatInvalidResponse(payloadValidationResult));
 
       ctx.response().setStatusCode(400).end(errorResponse.encodePrettily());
       return;
@@ -57,7 +137,7 @@ public class Discovery
       {
         LOGGER.info("discovery saved successfully");
 
-        var response = Utils.createResponse("success", "discovery saved successfully.");
+        var response = Utils.createResponse(STATUS_RESPONSE_SUCCESS, "discovery saved successfully.");
 
         ctx.response().setStatusCode(201).end(response.encodePrettily());
       })
@@ -65,7 +145,7 @@ public class Discovery
       {
         LOGGER.severe("Failed to save discovery: " + err.getMessage());
 
-        var errResponse = Utils.createResponse("error", "Failed to save discovery: " + err.getMessage());
+        var errResponse = Utils.createResponse(STATUS_RESPONSE_ERROR, "Failed to save discovery: " + err.getMessage());
 
         ctx.response().setStatusCode(500).end(errResponse.encodePrettily());
       });
@@ -82,7 +162,7 @@ public class Discovery
     {
       LOGGER.warning("Invalid discovery id received: " + id);
 
-      var response = Utils.createResponse("failed", "Invalid discovery id: id cannot be empty");
+      var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid discovery id: id cannot be empty");
 
       ctx.response().setStatusCode(400).end(response.encodePrettily());
       return;
@@ -100,31 +180,80 @@ public class Discovery
       })
       .onSuccess(replyBody ->
       {
-        var responce = Utils.createResponse("success", replyBody.toString());
+        var responce = Utils.createResponse(STATUS_RESPONSE_SUCCESS, replyBody.toString());
 
         ctx.response().setStatusCode(200).end(responce.encodePrettily());
       })
       .onFailure(err ->
       {
-        var failedResponse = Utils.createResponse("failed", err.getMessage());
+        var failedResponse = Utils.createResponse(STATUS_RESPONSE_FAIIED, err.getMessage());
 
         ctx.response().setStatusCode(400).end(failedResponse.encodePrettily());
+      });
+  }
+
+  // handle Update discovery
+  public static void updateDiscovery(RoutingContext ctx)
+  {
+    var discoveryId = ctx.pathParam(ID_HEADER_PATH);
+
+    if (discoveryId == null || discoveryId.trim().isEmpty())
+    {
+      LOGGER.warning("Invalid discovery id received: " + discoveryId);
+
+      var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid discovery id: id cannot be empty");
+
+      ctx.response().setStatusCode(400).end(response.encodePrettily());
+
+      return;
+    }
+
+    var payload = ctx.body().asJsonObject();
+
+    if (payload == null || payload.isEmpty())
+    {
+      LOGGER.warning("payload is empty");
+
+      var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid payload: payload is empty");
+
+      ctx.response().setStatusCode(400).end(response.encodePrettily());
+      return;
+    }
+
+    LOGGER.info("Updating discovery for id: " + discoveryId);
+
+    QueryHandler.updateByField(DISCOVERY_TABLE, payload, DISCOVERY_ID_KEY, discoveryId)
+      .onSuccess(v ->
+      {
+        LOGGER.info("Discovery updated successfully for id: " + discoveryId);
+
+        var response = Utils.createResponse(STATUS_RESPONSE_SUCCESS, "Discovery updated successfully");
+
+        ctx.response().setStatusCode(200).end(response.encodePrettily());
+      })
+      .onFailure(err ->
+      {
+        LOGGER.severe("Failed to save discovery: " + err.getMessage());
+
+        var response = Utils.createResponse(STATUS_RESPONSE_ERROR, "Failed to save discovery");
+
+        ctx.response().setStatusCode(500).end(response.encodePrettily());
       });
   }
 
   // handle delete discovery
   public static void deleteDiscovery(RoutingContext ctx)
   {
-    var discoveryId = ctx.pathParam(DISCOVERY_ID_HEADER_PATH);
+    var discoveryId = ctx.pathParam(ID_KEY);
 
     QueryHandler.deleteById(DISCOVERY_TABLE, discoveryId)
-      .onSuccess(deleted ->
+      .onSuccess(deletedStatus ->
       {
-        if (deleted)
+        if (deletedStatus)
         {
           LOGGER.info("discovery deleted successfully");
 
-          var response = new JsonObject().put("status", "success").put("statusMsg", "discovery deleted Sucessfully");
+          var response = new JsonObject().put(STATUS_KEY, STATUS_RESPONSE_SUCCESS).put("statusMsg", "discovery deleted Sucessfully");
 
           ctx.response().setStatusCode(200).end(response.encodePrettily());
         }
@@ -132,16 +261,16 @@ public class Discovery
         {
           LOGGER.info("No matching record found");
 
-          var response = new JsonObject().put("status", "success").put("statusMsg", "No matching record found");
+          var response = new JsonObject().put(STATUS_KEY, STATUS_RESPONSE_SUCCESS).put("statusMsg", "No matching record found");
 
           ctx.response().setStatusCode(200).end(response.encodePrettily());
         }
       })
       .onFailure(err ->
       {
-        LOGGER.severe("Failed to find credential: " + err.getMessage());
+        LOGGER.severe("Failed to find discovery: " + err.getMessage());
 
-        var response = Utils.createResponse("error", "Database query failed");
+        var response = Utils.createResponse(STATUS_RESPONSE_ERROR, "Database query failed");
 
         ctx.response().setStatusCode(500).end(response.encodePrettily());
       });
