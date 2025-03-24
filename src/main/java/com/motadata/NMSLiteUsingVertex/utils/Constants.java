@@ -116,5 +116,5 @@ public class Constants
 
   public static final Integer MAX_POOL_SIZE = 5;
 
-  public static final String DATABASE_NAME = "nms_lite_18";
+  public static final String DATABASE_NAME = "nms_lite_19";
 }

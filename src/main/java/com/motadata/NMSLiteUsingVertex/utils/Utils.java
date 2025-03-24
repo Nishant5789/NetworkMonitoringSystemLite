@@ -24,20 +24,9 @@ import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
 
 public class Utils
 {
-//  private static final Logger LOGGER = AppLogger.getLogger();
-  private static final Logger LOGGER =  Logger.getLogger(Utils.class.getName());
-
-  private static final List<JsonObject> pollingDataCache = new ArrayList<>();
+  private static final Logger LOGGER = AppLogger.getLogger();
 
   private static final Queue<JsonObject> objectQueue = new LinkedList<>();
-
-  // create send responseObject
-  public static JsonObject createResponse(String status, String statusMsg)
-  {
-    return new JsonObject()
-      .put("status", status)
-      .put("statusMsg", statusMsg);
-  }
 
   // check ping is successful or not
   public static Future<Boolean> ping(String ip)
@@ -59,9 +48,11 @@ public class Utils
         var output = reader.readLine();
 
         var exitCode = process.waitFor();
+
         if (exitCode != 0)
         {
           LOGGER.severe("Ping command execution failed with exit code: " + exitCode);
+
           return false;
         }
 
@@ -70,6 +61,7 @@ public class Utils
       catch (IOException | InterruptedException e)
       {
         LOGGER.severe("Exception occurred during ping execution: " + e.getMessage());
+
         return false;
       }
     });
@@ -86,11 +78,13 @@ public class Utils
         if (res.succeeded())
         {
           LOGGER.info("Successful TCP connection for IP: " + ip + " Port: " + port);
+
           promise.complete(true);
         }
         else
         {
           LOGGER.severe("tcp connection is unSuccessful for IP: " + ip + " Port: " + port + " - " + res.cause().getMessage());
+
           promise.complete(false);
         }
       });
@@ -98,6 +92,7 @@ public class Utils
     catch (Exception exception)
     {
       LOGGER.severe("Failed to connection during  tcp connection for IP " + ip + " Port: " + port + " - " + exception.getMessage());
+
       promise.fail("Failed to connection during tcp connection for IP " + ip + "& Port: " + port);
     }
 
@@ -126,6 +121,7 @@ public class Utils
     catch (Exception exception)
     {
       LOGGER.severe("Failed to check device availability: " + exception.getMessage());
+
       return Future.failedFuture("Failed to check device availability");
     }
   }
@@ -140,6 +136,7 @@ public class Utils
       try
       {
         ProcessBuilder builder = new ProcessBuilder("bash", "-c", "cd /home/nishant/codeworkspace/GoLandWorkSpace/PluginEngine && /usr/local/go/bin/go run main.go");
+
         builder.redirectErrorStream(true);
         Process process = builder.start();
 
@@ -154,6 +151,8 @@ public class Utils
               if (line.contains("Starting ZMQ Server..."))
               {
                 nestedPromise.complete("ZMQ Server Started Successfully");
+
+                LOGGER.info("go plugin is started successsfully.....");
               }
             }
           }
@@ -193,6 +192,12 @@ public class Utils
     return objectQueue;
   }
 
+  // remove Object from ObjectQueue
+  public static void removeObjectFromQueue(int objectId)
+  {
+    objectQueue.removeIf(obj -> obj.getInteger(OBJECT_ID_KEY) == objectId);
+  }
+
   // update objectqueue from database
   public static Future<Object> updateObjectQueueFromDatabase()
   {
@@ -202,18 +207,12 @@ public class Utils
         LOGGER.info("Received object  from DB: " + (result != null ? result.size() : 0));
 
         objectQueue.clear(); // Clear the existing queue before updating
+
         for (JsonObject obj : result)
         {
           var credentialDataPayload = new JsonObject(obj.getString(CREDENTIAL_DATA_KEY));
 
-          JsonObject filteredObject = new JsonObject().put(IP_KEY, obj.getString(IP_KEY))
-            .put(PORT_KEY, PORT_VALUE)
-            .put(PASSWORD_KEY, credentialDataPayload.getString(PASSWORD_KEY))
-            .put(USERNAME_KEY, credentialDataPayload.getString(USERNAME_KEY))
-            .put(PLUGIN_ENGINE_TYPE_KEY, PLUGIN_ENGINE_LINUX)
-            .put(OBJECT_ID_KEY, obj.getInteger(OBJECT_ID_KEY))
-            .put(LAST_POLL_TIME_KEY, System.currentTimeMillis())
-            .put(POLL_INTERVAL_KEY, obj.getInteger(POLL_INTERVAL_KEY));
+          JsonObject filteredObject = new JsonObject().put(IP_KEY, obj.getString(IP_KEY)).put(PORT_KEY, PORT_VALUE).put(PASSWORD_KEY, credentialDataPayload.getString(PASSWORD_KEY)).put(USERNAME_KEY, credentialDataPayload.getString(USERNAME_KEY)).put(PLUGIN_ENGINE_TYPE_KEY, PLUGIN_ENGINE_LINUX).put(OBJECT_ID_KEY, obj.getInteger(OBJECT_ID_KEY)).put(LAST_POLL_TIME_KEY, System.currentTimeMillis()).put(POLL_INTERVAL_KEY, obj.getInteger(POLL_INTERVAL_KEY));
 
           objectQueue.add(filteredObject);
         }
@@ -415,6 +414,15 @@ public class Utils
       .collect(Collectors.joining(", "));
   }
 
+  // create send responseObject
+  public static JsonObject createResponse(String status, String statusMsg)
+  {
+    return new JsonObject()
+      .put("status", status)
+      .put("statusMsg", statusMsg);
+  }
+
+  // replace underscore to dot in counters keys
   public static JsonObject replaceUnderscoreWithDot(JsonObject input)
   {
     JsonObject output = new JsonObject();
@@ -426,7 +434,7 @@ public class Utils
     return output;
   }
 
-
+  // get the tableId from tablename
   public static String getIdColumnByTable(String tableName)
   {
     return switch (tableName)
@@ -437,5 +445,4 @@ public class Utils
       default -> ID_KEY; // fallback generic ID column
     };
   }
-
 }

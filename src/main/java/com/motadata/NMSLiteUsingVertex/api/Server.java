@@ -28,9 +28,7 @@ public class Server extends AbstractVerticle
 
     mainRouter.route("/").handler(ctx ->
     {
-      ctx.response()
-        .putHeader("content-type", "text/plain")
-        .end("Welcome to the API");
+      ctx.response().putHeader("content-type", "text/plain").end("Welcome to the NMS-LITE");
     });
 
     vertx.createHttpServer()

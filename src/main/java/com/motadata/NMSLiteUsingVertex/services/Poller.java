@@ -2,6 +2,7 @@ package com.motadata.NMSLiteUsingVertex.services;
 
 import com.motadata.NMSLiteUsingVertex.Main;
 import com.motadata.NMSLiteUsingVertex.database.QueryHandler;
+import com.motadata.NMSLiteUsingVertex.utils.AppLogger;
 import com.motadata.NMSLiteUsingVertex.utils.Utils;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Promise;
@@ -17,8 +18,8 @@ import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
 
 public class Poller extends AbstractVerticle
 {
-  //    private static final Logger LOGGER = AppLogger.getLogger();
-  private static final Logger LOGGER = Logger.getLogger(ObjectManager.class.getName());
+      private static final Logger LOGGER = AppLogger.getLogger();
+//    private static final Logger LOGGER = Logger.getLogger(ObjectManager.class.getName());
 
   @Override
   public void start(Promise<Void> startPromise) throws Exception
@@ -49,33 +50,31 @@ public class Poller extends AbstractVerticle
           .onSuccess(result ->
           {
             var jsonResponse = result.body();
+            var currTimestamp = System.currentTimeMillis();
             JsonObject pollResponsePayload;
 
             if (jsonResponse.getString(STATUS_KEY).equals(STATUS_RESPONSE_FAIIED))
             {
-              pollResponsePayload = new JsonObject().put(TIMESTAMP_KEY, System.currentTimeMillis()).put(COUNTERS_KEY, jsonResponse.getString(STATUS_MSG_KEY));
+              pollResponsePayload = new JsonObject().put(OBJECT_ID_KEY, objectId).put(TIMESTAMP_KEY, currTimestamp).put(COUNTERS_KEY, jsonResponse.getJsonObject(METRICS_DATA_KEY));
             }
             else
             {
-              var currTimestamp = System.currentTimeMillis();
-
               // uddate lastpolltime in Object queue
               Utils.updateObjectLastPollTimeInObjectQueue(objectId, currTimestamp);
 
               var counterObjects = Utils.replaceUnderscoreWithDot(jsonResponse.getJsonObject(METRICS_DATA_KEY));
 
               pollResponsePayload = new JsonObject().put(OBJECT_ID_KEY, objectId).put(TIMESTAMP_KEY,currTimestamp).put(COUNTERS_KEY, counterObjects);
-
-              QueryHandler.save(POLLING_RESULTS_TABLE, pollResponsePayload)
-                .onSuccess(responce ->
-                {
-                  LOGGER.info("Polling completed for ObjectId: " + objectId +" at timestamp: " + Instant.ofEpochMilli(currTimestamp).atZone(ZoneId.systemDefault()).toLocalTime());
-                })
-                .onFailure(err ->
-                {
-                  LOGGER.severe("Failed during polling flow for objectId: " + objectId + " Error: " + err.getMessage());
-                });
             }
+            QueryHandler.save(POLLING_RESULTS_TABLE, pollResponsePayload)
+              .onSuccess(responce ->
+              {
+                LOGGER.info("Polling completed for ObjectId: " + objectId +" at timestamp: " + Instant.ofEpochMilli(currTimestamp).atZone(ZoneId.systemDefault()).toLocalTime());
+              })
+              .onFailure(err ->
+              {
+                LOGGER.severe("Failed during polling flow for objectId: " + objectId + " Error: " + err.getMessage());
+              });
           })
           .onFailure(err ->
           {

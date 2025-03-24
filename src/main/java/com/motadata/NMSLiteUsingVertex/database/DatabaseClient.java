@@ -34,30 +34,30 @@ public class DatabaseClient
     pool = Pool.pool(vertx, connectOptions, poolOptions);
 
     // Check if database exists
-    String checkDbQuery = "SELECT 1 FROM pg_database WHERE datname = 'nms_lite_18'";
+    String checkDbQuery = "SELECT 1 FROM pg_database WHERE datname = 'nms_lite_19'";
 
     pool.query(checkDbQuery).execute(ar ->
     {
       if (ar.succeeded() && ar.result().size() > 0)
       {
-        LOGGER.info("Database nms_lite_18 already exists.");
+        LOGGER.info("Database nms_lite_19 already exists.");
 
         switchToNewDatabase(vertx).onComplete(promise);
       }
       else
       {
-        LOGGER.info("Database nms_lite_18 does not exist, creating...");
+        LOGGER.info("Database nms_lite_19 does not exist, creating...");
 
-        pool.query("CREATE DATABASE nms_lite_18").execute(createAr ->
+        pool.query("CREATE DATABASE nms_lite_19").execute(createAr ->
         {
           if (createAr.succeeded())
           {
-            LOGGER.info("Database nms_lite_18 created successfully.");
+            LOGGER.info("Database nms_lite_19 created successfully.");
             switchToNewDatabase(vertx).onComplete(promise);
           }
           else
           {
-            LOGGER.warning("Failed to create database nms_lite_18: " + createAr.cause().getMessage());
+            LOGGER.warning("Failed to create database nms_lite_19: " + createAr.cause().getMessage());
             promise.fail(createAr.cause()); // ✅ Fail if DB creation fails
           }
         });

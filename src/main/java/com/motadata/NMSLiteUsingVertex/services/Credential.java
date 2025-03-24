@@ -14,8 +14,7 @@ import static com.motadata.NMSLiteUsingVertex.utils.Utils.formatInvalidResponse;
 
 public class Credential
 {
-//  private static final Logger LOGGER = AppLogger.getLogger();
-  private static final Logger LOGGER =  Logger.getLogger(Credential.class.getName());
+  private static final Logger LOGGER = AppLogger.getLogger();
 
   // handle save credential
   public static void saveCredential(RoutingContext ctx)
@@ -196,9 +195,11 @@ public class Credential
       {
         LOGGER.severe("Database query failed: " + err.getMessage());
 
-        var response = Utils.createResponse(STATUS_RESPONSE_ERROR, "Database query failed");
+        String errorMessage = err.getMessage().contains("violates foreign key constraint") ? "Database query failed because the credential is used by a provisioned object" : "Database query failed";
 
-        ctx.response().setStatusCode(500).end(response.encodePrettily());
+        JsonObject errResponse = Utils.createResponse(STATUS_RESPONSE_ERROR, errorMessage);
+
+        ctx.response().setStatusCode(500).end(errResponse.encodePrettily());
       });
   }
 }

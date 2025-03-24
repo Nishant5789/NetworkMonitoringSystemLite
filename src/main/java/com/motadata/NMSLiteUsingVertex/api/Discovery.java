@@ -96,7 +96,7 @@ public class Discovery
   {
     LOGGER.info("Fetching all discovery");
 
-    QueryHandler.getAll(DISCOVERY_TABLE)
+    QueryHandler.getAllWithJoinTable(DISCOVERY_TABLE, CREDENTIAL_TABLE, CREDENTIAL_ID_KEY)
       .onSuccess(discoveryRecords ->
       {
         LOGGER.info("Fetched discovery successfully");
@@ -145,7 +145,16 @@ public class Discovery
       {
         LOGGER.severe("Failed to save discovery: " + err.getMessage());
 
-        var errResponse = Utils.createResponse(STATUS_RESPONSE_ERROR, "Failed to save discovery: " + err.getMessage());
+        JsonObject errResponse;
+
+        if(err.getMessage().contains("violates foreign key constraint"))
+        {
+           errResponse = Utils.createResponse(STATUS_RESPONSE_ERROR, "Failed to save discovery: provided credentialId not exists");
+        }
+        else
+        {
+          errResponse = Utils.createResponse(STATUS_RESPONSE_ERROR, "Failed to save discovery");
+        }
 
         ctx.response().setStatusCode(500).end(errResponse.encodePrettily());
       });
@@ -169,14 +178,22 @@ public class Discovery
     }
 
     QueryHandler.getById(DISCOVERY_TABLE, id)
-      .compose( discoveryRecord -> ctx.vertx().eventBus().request(DISCOVERY_EVENT, discoveryRecord))
+      .compose( discoveryRecord ->
+      {
+        if(discoveryRecord == null)
+        {
+          LOGGER.warning("Discovery not found: " + id);
+
+          return Future.failedFuture("discovery not found for provided Id");
+        }
+        return  Main.vertx().eventBus().request(DISCOVERY_EVENT, discoveryRecord);
+        })
       .compose(reply ->
       {
         var updatePayload = new JsonObject().put(DISCOVERY_STATUS_KEY, "completed");
 
         return QueryHandler.updateByField(DISCOVERY_TABLE, updatePayload, DISCOVERY_ID_KEY, id)
           .map(v -> reply.body());
-
       })
       .onSuccess(replyBody ->
       {

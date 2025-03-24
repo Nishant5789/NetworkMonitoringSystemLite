@@ -20,8 +20,8 @@ public class Object
 {
   private static final Router router = Router.router(Main.vertx());
 
-//  private static final Logger LOGGER = AppLogger.getLogger();
-  private static final Logger LOGGER =  Logger.getLogger(Object.class.getName());
+  private static final Logger LOGGER = AppLogger.getLogger();
+//  private static final Logger LOGGER =  Logger.getLogger(Object.class.getName());
 
   // return subrouter for object
   public static Router getRouter()
@@ -66,7 +66,7 @@ public class Object
           {
             LOGGER.severe("Object is already Provisioned & perform");
 
-            var response = Utils.createResponse(STATUS_RESPONSE_SUCCESS, "Object is already Provisioned & perform");
+            var response = Utils.createResponse(STATUS_RESPONSE_SUCCESS, "Object is already Provisioned & perform polling..");
 
             ctx.response().setStatusCode(200).end(response.encodePrettily());
             return;
@@ -139,7 +139,7 @@ public class Object
   {
     LOGGER.info("Fetching all objects with details...");
 
-    QueryHandler.getAll(PROVISIONED_OBJECTS_TABLE)
+    QueryHandler.getAllWithJoinTable(PROVISIONED_OBJECTS_TABLE, CREDENTIAL_TABLE, CREDENTIAL_ID_KEY)
       .onSuccess(objects ->
       {
         LOGGER.info("Fetched objects successfully");
@@ -224,6 +224,8 @@ public class Object
       {
         if (deleted) {
           LOGGER.info("Object deleted successfully");
+
+          Utils.removeObjectFromQueue(Integer.parseInt(objectId));
 
           var response = new JsonObject().put(STATUS_KEY, STATUS_RESPONSE_SUCCESS).put(STATUS_MSG_KEY, "Object deleted successfully");
 

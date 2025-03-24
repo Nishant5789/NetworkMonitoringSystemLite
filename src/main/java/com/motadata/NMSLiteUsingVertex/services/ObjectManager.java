@@ -22,8 +22,8 @@ import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
 
 public class ObjectManager extends AbstractVerticle
 {
-//  private static final Logger LOGGER = AppLogger.getLogger();
-  private static final Logger LOGGER =  Logger.getLogger(ObjectManager.class.getName());
+  private static final Logger LOGGER = AppLogger.getLogger();
+//  private static final Logger LOGGER =  Logger.getLogger(ObjectManager.class.getName());
 
   @Override
   public void start(Promise<Void> startPromise) throws Exception
@@ -52,13 +52,13 @@ public class ObjectManager extends AbstractVerticle
         {
           LOGGER.info("Discovery details not found for IP: " + ip);
 
-          return Future.failedFuture("No discovery record found");
+          return Future.failedFuture("No discovery record found for your provided IP");
         }
         else if(discoveryRecord.getString(DISCOVERY_STATUS_KEY).equals(STATUS_PENDING))
         {
-          LOGGER.info("Discovery is pending for this IP: " + ip);
+          LOGGER.info("Discovery is incomplete for this IP: " + ip);
 
-          return Future.failedFuture("Discovery run is pending for your provided IP");
+          return Future.failedFuture("Discovery is incomplete for your provided IP");
         }
 
         var credentialDataPayload = new JsonObject(discoveryRecord.getString(CREDENTIAL_DATA_KEY));
@@ -104,7 +104,7 @@ public class ObjectManager extends AbstractVerticle
   // schedule object polling
   private void handleObjectScheduling()
   {
-    Main.vertx().setTimer(60000, timeId ->
+    Main.vertx().setPeriodic(2000, timeId ->
     {
       LOGGER.info("Polling is started, objectQueue: " + Utils.getObjectQueue());
 

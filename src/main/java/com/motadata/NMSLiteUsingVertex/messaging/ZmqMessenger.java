@@ -1,6 +1,7 @@
 package com.motadata.NMSLiteUsingVertex.messaging;
 
 import com.motadata.NMSLiteUsingVertex.services.Credential;
+import com.motadata.NMSLiteUsingVertex.utils.AppLogger;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Promise;
 import io.vertx.core.eventbus.Message;
@@ -21,7 +22,7 @@ public class ZmqMessenger extends AbstractVerticle
 
   private ZMQ.Socket dealer;
 
-  private static final Logger LOGGER =  Logger.getLogger(Credential.class.getName());
+  private static final Logger LOGGER = AppLogger.getLogger();
 
   private static final int RESPONSE_CHECK_INTERVAL = 1000;
 
@@ -29,15 +30,15 @@ public class ZmqMessenger extends AbstractVerticle
 
   private static final long REQUEST_TIMEOUT_CHECK_INTERVAL = 2000;
 
-  private final Map<String, PendingRequest> pendingRequests = new HashMap<>();
+  private final Map<String, RequestHolder> pendingRequests = new HashMap<>();
 
-  private static class PendingRequest
+  private static class RequestHolder
   {
     Message<JsonObject> message;
 
     long timestamp;
 
-    PendingRequest(Message<JsonObject> message, long timestamp)
+    RequestHolder(Message<JsonObject> message, long timestamp)
     {
       this.message = message;
       this.timestamp = timestamp;
@@ -78,7 +79,7 @@ public class ZmqMessenger extends AbstractVerticle
 
     messagePayload.put(REQUEST_ID, requestId);
 
-    pendingRequests.put(requestId, new PendingRequest(message, System.currentTimeMillis()));
+    pendingRequests.put(requestId, new RequestHolder(message, System.currentTimeMillis()));
 
     LOGGER.info("zmq request send using: " + Thread.currentThread().getName() + " with data : " + message.body());
 
@@ -107,7 +108,7 @@ public class ZmqMessenger extends AbstractVerticle
 
         if (pendingRequests.containsKey(requestId))
         {
-          PendingRequest requestValue = pendingRequests.get(requestId);
+          RequestHolder requestValue = pendingRequests.get(requestId);
 
           LOGGER.info("zmq response received using: " + Thread.currentThread().getName() + " with statusMsg : "+replyJson.getString(STATUS_MSG_KEY));
 

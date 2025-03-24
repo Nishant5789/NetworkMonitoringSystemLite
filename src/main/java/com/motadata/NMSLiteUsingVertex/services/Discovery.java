@@ -2,6 +2,7 @@ package com.motadata.NMSLiteUsingVertex.services;
 
 import com.motadata.NMSLiteUsingVertex.Main;
 import com.motadata.NMSLiteUsingVertex.database.QueryHandler;
+import com.motadata.NMSLiteUsingVertex.utils.AppLogger;
 import com.motadata.NMSLiteUsingVertex.utils.Utils;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Future;
@@ -14,8 +15,8 @@ import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
 
 public class Discovery extends AbstractVerticle
 {
-//  private static final Logger LOGGER = AppLogger.getLogger();
-  private static final Logger LOGGER =  Logger.getLogger(Discovery.class.getName());
+  private static final Logger LOGGER = AppLogger.getLogger();
+//  private static final Logger LOGGER =  Logger.getLogger(Discovery.class.getName());
 
   @Override
   public void start()
