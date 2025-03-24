@@ -73,49 +73,43 @@ CREATE TABLE IF NOT EXISTS polling_results (
 Here is the updated API documentation with **response examples** included where applicable. Since the original JSON did not provide specific response structures, I have added generic examples based on typical API responses. You can replace these with actual responses from your API when available.
 
 ---
-## ✅ **Modules and API Endpoints Summary**
 
-### 🔑 **1. Credentials Module**
-| API | Method | Sample URL |
-|----|--------|-----------|
-| Get All Credentials | GET | `/api/credentials/` |
-| Save Credential | POST | `/api/credentials/`<br>Body: `{ "name": "nishant12345", "username": "nishant", "password": "Nish@321" }` |
-| Get Credential by ID | GET | `/api/credentials/{id}` |
-| Update Credential by ID | PUT | `/api/credentials/1`<br>Body: `{ "name": "nishant4", "username": "nishant567", "password": "Nish@321" }` |
-| Delete Credential by ID | DELETE | `/api/credentials/4` |
+## 🔐 **Credentials Module**
 
----
-
-### 🌐 **2. Discovery Module**
-| API | Method | Sample URL |
-|----|--------|-----------|
-| Get All Discoveries | GET | `/api/discovery/` |
-| Get Discovery by ID | GET | `/api/discovery/{id}` |
-| Add Discovery | POST | `/api/discovery/`<br>Body: `{ "ips": ["192.168.98.117"], "port": 22, "type": "linux", "credential_id": 2 }` |
-| Run Discovery | POST | `/api/discovery/run`<br>Body: `{ "credential_id": 2 }` |
-| Update Discovery | GET | `/api/discovery/{id}` (Unclear - might need to be PUT) |
-| Delete Discovery by ID | DELETE | `/api/discovery/3` |
+| API Name                | Method | URL with Payload                                                                                      | Description                  |
+|-------------------------|--------|--------------------------------------------------------------------------------------------------------|------------------------------|
+| Get All Credentials     | GET    | `http://localhost:8080/api/credentials/`                                                               | Fetch all credentials        |
+| Save Credential         | POST   | `http://localhost:8080/api/credentials/` <br> **Payload:** ```json { "credential_name": "nish123", "credential_data": { "username": "nishant", "password": "password1234" }, "system_type": "linux" } ``` | Save a new credential        |
+| Get Credential by ID    | GET    | `http://localhost:8080/api/credentials/{id}`                                                           | Fetch a specific credential  |
+| Update Credential by ID | PUT    | `http://localhost:8080/api/credentials/{id}` <br> **Payload:** ```json { "credential_data": { "username": "nishant", "password": "password1234" }, "system_type": "linux" } ``` | Update a credential          |
+| Delete Credential by ID | DELETE | `http://localhost:8080/api/credentials/{id}`                                                           | Delete a credential          |
 
 ---
 
-### 📦 **3. Object Module**
-| API | Method | Sample URL |
-|----|--------|-----------|
-| Start Provision | POST | `/api/provision/`<br>Body: `{ "monitor_id": 10, "pollInterval": 3000 }` |
-| Get Polling Data by Object ID | GET | `/api/provision/pollingdata/8` |
-| Get Object by ID | GET | `/api/object/1` |
-| Get All Objects | GET | `/api/object/` |
-| Delete Object by ID | DELETE | `/api/object/6` |
+## 🔍 **Discovery Module**
+
+| API Name               | Method | URL with Payload                                                                                      | Description                         |
+|------------------------|--------|--------------------------------------------------------------------------------------------------------|-------------------------------------|
+| Get All Discovery      | GET    | `http://localhost:8080/api/discovery/`                                                                  | Fetch all discovery tasks           |
+| Get Discovery by ID    | GET    | `http://localhost:8080/api/discovery/{id}`                                                              | Fetch a discovery task              |
+| Add Discovery          | POST   | `http://localhost:8080/api/discovery/` <br> **Payload:** ```json { "ip": "192.168.0.68", "port": 22, "credential_id": 1 } ``` | Create a discovery task             |
+| Run Discovery          | POST   | `http://localhost:8080/api/discovery/run` <br> **Payload:** ```json { "discovery_id": 7 } ```          | Run a discovery task                |
+| Update Discovery       | PUT    | `http://localhost:8080/api/discovery/{id}` <br> **Payload:** ```json { "ip": "192.168.0.63", "port": 22 } ``` | Update discovery details            |
+| Delete Discovery by ID | DELETE | `http://localhost:8080/api/discovery/{id}`                                                              | Delete discovery                    |
 
 ---
 
-### 📈 **4. Availability Module**
-| API | Method | Sample URL |
-|----|--------|-----------|
-| Check Availability | GET | `/api/availability/` *(the JSON cuts off here, endpoint unclear but assumed based on name)* |
+## 🖥 **Object Module**
+
+| API Name                        | Method | URL with Payload                                                                                      | Description                               |
+|---------------------------------|--------|--------------------------------------------------------------------------------------------------------|-------------------------------------------|
+| Start Provision                 | POST   | `http://localhost:8080/api/object/provision/` <br> **Payload:** ```json { "ip": "192.168.0.63", "pollinterval": 1000 } ``` | Start provisioning                        |
+| Get Polling Data by Object ID   | GET    | `http://localhost:8080/api/object/pollingdata/{id}`                                                    | Get polling data for an object            |
+| Get Object by ID                | GET    | `http://localhost:8080/api/object/{id}`                                                                | Get object information                    |
+| Get All Objects                 | GET    | `http://localhost:8080/api/object/`                                                                     | Fetch all objects                         |
+| Delete Object by ID             | DELETE | `http://localhost:8080/api/object/{id}`                                                                | Delete a specific object                  |
 
 ---
-
 
 ## Communication
 
