@@ -190,7 +190,12 @@ public class Discovery
         })
       .compose(reply ->
       {
-        var updatePayload = new JsonObject().put(DISCOVERY_STATUS_KEY, "completed");
+        if(reply.body().toString().contains("Discovery failed"))
+        {
+          return Future.failedFuture(reply.body().toString());
+        }
+
+        var updatePayload = new JsonObject().put(DISCOVERY_STATUS_KEY, STATUS_COMPLETED);
 
         return QueryHandler.updateByField(DISCOVERY_TABLE, updatePayload, DISCOVERY_ID_KEY, id)
           .map(v -> reply.body());
@@ -203,9 +208,21 @@ public class Discovery
       })
       .onFailure(err ->
       {
-        var failedResponse = Utils.createResponse(STATUS_RESPONSE_FAIIED, err.getMessage());
+        var updatePayload = new JsonObject().put(DISCOVERY_STATUS_KEY, STATUS_RESPONSE_FAIIED);
 
-        ctx.response().setStatusCode(400).end(failedResponse.encodePrettily());
+        QueryHandler.updateByField(DISCOVERY_TABLE, updatePayload, DISCOVERY_ID_KEY, id).map(v -> err.getMessage())
+          .onSuccess(errMsg ->
+            {
+              var failedResponse = Utils.createResponse(STATUS_RESPONSE_FAIIED, errMsg);
+
+              ctx.response().setStatusCode(500).end(failedResponse.encodePrettily());
+          })
+          .onFailure(updateError ->
+          {
+            var failedResponse = Utils.createResponse(STATUS_RESPONSE_FAIIED, updateError.getMessage());
+
+            ctx.response().setStatusCode(500).end(failedResponse.encodePrettily());
+          });
       });
   }
 

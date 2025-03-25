@@ -23,7 +23,6 @@ import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
 public class ObjectManager extends AbstractVerticle
 {
   private static final Logger LOGGER = AppLogger.getLogger();
-//  private static final Logger LOGGER =  Logger.getLogger(ObjectManager.class.getName());
 
   @Override
   public void start(Promise<Void> startPromise) throws Exception
@@ -43,7 +42,6 @@ public class ObjectManager extends AbstractVerticle
     var payload = message.body();
     var ip = payload.getString(IP_KEY);
     var pollInterval = payload.getInteger(POLL_INTERVAL_KEY);
-    var objectPayload = new JsonObject[1];
 
     QueryHandler.getByFieldWithJoinTable(DISCOVERY_TABLE, CREDENTIAL_TABLE, CREDENTIAL_ID_KEY, IP_KEY, ip)
       .compose(discoveryRecord ->
@@ -62,36 +60,24 @@ public class ObjectManager extends AbstractVerticle
         }
 
         var credentialDataPayload = new JsonObject(discoveryRecord.getString(CREDENTIAL_DATA_KEY));
-        objectPayload[0] = createObject(credentialDataPayload, discoveryRecord, pollInterval);
+        var objectPayload = createObject(credentialDataPayload, discoveryRecord, pollInterval);
         var provisionObjectPayload = createProvisionObjectPayload(discoveryRecord, pollInterval);
 
-        return QueryHandler.save(PROVISIONED_OBJECTS_TABLE, provisionObjectPayload);
+        return QueryHandler.save(PROVISIONED_OBJECTS_TABLE, provisionObjectPayload).map(v-> objectPayload);
       })
-      .compose(saveResult ->
+      .compose(objectPayload ->
       {
         LOGGER.info("Provisioned object successfully created for IP: " + ip);
 
-        return QueryHandler.getByField(PROVISIONED_OBJECTS_TABLE, IP_KEY, ip);
+        return QueryHandler.getByField(PROVISIONED_OBJECTS_TABLE, IP_KEY, ip).map(provisionedObjectRecord -> objectPayload.put(OBJECT_ID_KEY,provisionedObjectRecord.getInteger(OBJECT_ID_KEY)));
       })
-      .onSuccess(provisionedObjectRecord ->
+      .onSuccess(objectPayload ->
       {
-        if (provisionedObjectRecord != null)
-        {
-          var objectId = provisionedObjectRecord.getInteger(OBJECT_ID_KEY);
-          objectPayload[0].put(OBJECT_ID_KEY, objectId);  // ✅ Add objectId after fetching
+          Utils.addObjectInQueue(objectPayload);
 
-          Utils.addObjectInQueue(objectPayload[0]);
-
-          LOGGER.info("Object with IP: " + ip + " and Object ID: " + objectId + " added to objectQueue");
+          LOGGER.info("Object with IP: " + ip + " and Object ID: " + objectPayload.getInteger(OBJECT_ID_KEY) + " added to objectQueue");
 
           message.reply(Utils.createResponse(STATUS_KEY, STATUS_RESPONSE_SUCCESS));
-        }
-        else
-        {
-          LOGGER.warning("Provisioned object record not found after saving for IP: " + ip);
-
-          message.reply(Utils.createResponse(STATUS_RESPONSE_FAIIED, "Provisioned object record not found"));
-        }
       })
       .onFailure(err ->
       {
@@ -104,7 +90,7 @@ public class ObjectManager extends AbstractVerticle
   // schedule object polling
   private void handleObjectScheduling()
   {
-    Main.vertx().setPeriodic(2000, timeId ->
+    Main.vertx().setPeriodic(20000, timeId ->
     {
       LOGGER.info("Polling is started, objectQueue: " + Utils.getObjectQueue());
 
@@ -133,22 +119,12 @@ public class ObjectManager extends AbstractVerticle
  //create object with data to store on objectQueue
   private JsonObject createObject(JsonObject credentialDataPayload, JsonObject discoveryRecord, Integer pollInterval)
   {
-    return new JsonObject()
-      .put(USERNAME_KEY, credentialDataPayload.getString(USERNAME_KEY))
-      .put(PASSWORD_KEY, credentialDataPayload.getString(PASSWORD_KEY))
-      .put(IP_KEY, discoveryRecord.getString(IP_KEY))
-      .put(PORT_KEY, discoveryRecord.getString(PORT_KEY))
-      .put(PLUGIN_ENGINE_TYPE_KEY, PLUGIN_ENGINE_LINUX)
-      .put(LAST_POLL_TIME_KEY, System.currentTimeMillis())
-      .put(POLL_INTERVAL_KEY, pollInterval);
+    return new JsonObject().put(USERNAME_KEY, credentialDataPayload.getString(USERNAME_KEY)).put(PASSWORD_KEY, credentialDataPayload.getString(PASSWORD_KEY)).put(IP_KEY, discoveryRecord.getString(IP_KEY)).put(PORT_KEY, discoveryRecord.getString(PORT_KEY)).put(PLUGIN_ENGINE_TYPE_KEY, PLUGIN_ENGINE_LINUX).put(LAST_POLL_TIME_KEY, System.currentTimeMillis()).put(POLL_INTERVAL_KEY, pollInterval);
   }
 
   //create provision_object  store on provisioned_objectstable on database
   private JsonObject createProvisionObjectPayload(JsonObject discoveryRecord, Integer pollInterval)
   {
-    return new JsonObject()
-      .put(IP_KEY, discoveryRecord.getString(IP_KEY))
-      .put(CREDENTIAL_ID_KEY, Integer.parseInt(discoveryRecord.getString(CREDENTIAL_ID_KEY)))
-      .put(POLL_INTERVAL_KEY, pollInterval);
+    return new JsonObject().put(IP_KEY, discoveryRecord.getString(IP_KEY)).put(CREDENTIAL_ID_KEY, Integer.parseInt(discoveryRecord.getString(CREDENTIAL_ID_KEY))).put(POLL_INTERVAL_KEY, pollInterval);
   }
 }

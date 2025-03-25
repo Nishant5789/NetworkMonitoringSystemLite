@@ -16,7 +16,6 @@ import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
 public class Discovery extends AbstractVerticle
 {
   private static final Logger LOGGER = AppLogger.getLogger();
-//  private static final Logger LOGGER =  Logger.getLogger(Discovery.class.getName());
 
   @Override
   public void start()
@@ -40,7 +39,7 @@ public class Discovery extends AbstractVerticle
       {
         if (!flag)
         {
-          return Future.failedFuture("port is not available");
+          return Future.failedFuture("ssh service is not running or disable on provided port");
         }
 
         return QueryHandler.getById(CREDENTIAL_TABLE, credentialId);
@@ -53,6 +52,7 @@ public class Discovery extends AbstractVerticle
         }
 
         var credentialDataPayload = new JsonObject(credential.getString(CREDENTIAL_DATA_KEY));
+
         var zmqReqPayload = new JsonObject().put(USERNAME_KEY, credentialDataPayload.getString(USERNAME_KEY)).put(PASSWORD_KEY, credentialDataPayload.getString(PASSWORD_KEY)).put(IP_KEY, ip).put(PORT_KEY, port).put(EVENT_NAME_KEY, DISCOVERY_EVENT).put(PLUGIN_ENGINE_TYPE_KEY, PLUGIN_ENGINE_LINUX);
 
          return Main.vertx().eventBus().<JsonObject>request(ZMQ_REQUEST_EVENT, zmqReqPayload);
