@@ -23,19 +23,19 @@ public class Object
   // return subrouter for object
   public static Router getRouter()
   {
-    // POST /api/object/provision/ - Handle device provisioning
+    // POST /api/object - Handle device provisioning
     router.post("/provision").handler(Object::handleProvisioning);
 
-    // GET /api/object/pollingdata/:object_id - fetch Polling data by objectId
+    // GET /api/object - fetch Polling data by objectId
     router.get("/pollingdata/:ip_address").handler(Object::handlePollingData);
 
-    // GET /api/object/ - get all objects with data
+    // GET /api/object - get all objects with data
     router.get("/").handler(Object::getAllObjects);
 
-    // GET /api/object/ - get object with data
+    // GET /api/object - get object with data
     router.get("/:object_id").handler(Object::getObjectById);
 
-    // DELETE /api/object/:object_id - delete Monitor by Id
+    // DELETE /api/object - delete Monitor by Id
     router.delete("/:object_id").handler(Object::deleteObject);
 
     return router;

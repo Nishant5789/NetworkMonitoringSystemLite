@@ -36,10 +36,10 @@ public class Discovery
     // PUT  /api/discovery - update discovery
     router.put("/:id").handler(Discovery::updateDiscovery);
 
-    // GET /api/run/ - run discovery
+    // GET /api/discovery - run discovery
     router.post("/run").handler(Discovery::handleRunDiscovery);
 
-    // DELETE /api/:discoveryId - delete discovery
+    // DELETE /api/discovery - delete discovery
     router.delete("/:id").handler(Discovery::deleteDiscovery);
 
     return router;

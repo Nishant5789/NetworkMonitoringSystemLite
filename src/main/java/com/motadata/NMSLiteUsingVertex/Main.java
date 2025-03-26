@@ -68,7 +68,7 @@ public class Main
       })
       .compose(dbResult ->
       {
-        LOGGER.info("Database initialized and polling data cache updated successfully.");
+        LOGGER.info("Database initialized and object cache updated successfully.");
 
         return deployVerticles();
       })
@@ -93,9 +93,12 @@ public class Main
 
       vertx.close(ar ->
       {
-        if (ar.succeeded()) {
+        if (ar.succeeded())
+        {
           LOGGER.info("Vert.x closed successfully.");
-        } else {
+        }
+        else
+        {
           LOGGER.severe("Failed to close Vert.x: " + ar.cause().getMessage());
         }
       });
@@ -105,8 +108,7 @@ public class Main
   // handle initializeDatabase And UpdateCache
   public static Future<Object> initializeDatabaseAndUpdateCache(Vertx vertx)
   {
-    return DatabaseClient.initializeDatabase(vertx)
-      .compose(v -> Utils.updateObjectQueueFromDatabase());
+    return DatabaseClient.initializeDatabase(vertx).compose(v -> Utils.updateObjectQueueFromDatabase());
   }
 
   // deploy verticals sequentially

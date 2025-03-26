@@ -60,7 +60,9 @@ public class ObjectManager extends AbstractVerticle
         }
 
         var credentialDataPayload = new JsonObject(discoveryRecord.getString(CREDENTIAL_DATA_KEY));
+
         var objectPayload = createObject(credentialDataPayload, discoveryRecord, pollInterval);
+
         var provisionObjectPayload = createProvisionObjectPayload(discoveryRecord, pollInterval);
 
         return QueryHandler.save(PROVISIONED_OBJECTS_TABLE, provisionObjectPayload).map(v-> objectPayload);

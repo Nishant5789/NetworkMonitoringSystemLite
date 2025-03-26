@@ -12,15 +12,13 @@ import io.vertx.core.json.JsonObject;
 
 import java.time.Instant;
 import java.time.ZoneId;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
 
 import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
 
 public class Poller extends AbstractVerticle
 {
-      private static final Logger LOGGER = AppLogger.getLogger();
-//    private static final Logger LOGGER = Logger.getLogger(ObjectManager.class.getName());
+  private static final Logger LOGGER = AppLogger.getLogger();
 
   @Override
   public void start(Promise<Void> startPromise) throws Exception
@@ -40,8 +38,11 @@ public class Poller extends AbstractVerticle
     for (Object Object : objectsList)
     {
       var objectPayload = (JsonObject) Object;
+
       var pluginEngineType = objectPayload.getString(PLUGIN_ENGINE_TYPE_KEY);
+
       var objectId = objectPayload.getInteger(OBJECT_ID_KEY);
+
       var ip = objectPayload.getString(IP_KEY);
 
       objectPayload.put(EVENT_NAME_KEY, POLLING_EVENT);
@@ -81,7 +82,7 @@ public class Poller extends AbstractVerticle
               pollResponsePayload = new JsonObject().put(IP_KEY, ip).put(TIMESTAMP_KEY,currTimestamp).put(COUNTERS_KEY, counterObjects);
             }
 
-            // uddate lastpolltime in Object queue
+            // update lastPollTime in Object queue
             Utils.updateObjectLastPollTimeInObjectQueue(objectId, currTimestamp);
 
             // dumb polling data in database

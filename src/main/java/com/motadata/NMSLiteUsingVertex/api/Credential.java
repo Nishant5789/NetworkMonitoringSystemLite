@@ -10,19 +10,19 @@ public class Credential
   // return subroutes for credential
   public static Router getRouter()
   {
-    // POST /api/credentials/ - save credential
+    // POST /api/credentials - save credential
     router.post("/").handler(com.motadata.NMSLiteUsingVertex.services.Credential::saveCredential);
 
-    // GET /api/credentials/ - get all credentials
+    // GET /api/credentials - get all credentials
     router.get("/").handler(com.motadata.NMSLiteUsingVertex.services.Credential::getAllCredentials);
 
-    // GET /api/credentials/:id - get  credential by id
+    // GET /api/credentials - get  credential by id
     router.get("/:id").handler(com.motadata.NMSLiteUsingVertex.services.Credential::getCredentialById);
 
-    // PUT /api/credentials/:id - update credential
+    // PUT /api/credentials - update credential
     router.put("/:id").handler(com.motadata.NMSLiteUsingVertex.services.Credential::updateCredential);
 
-    // DELETE /api/credentials/:id - delete credential
+    // DELETE /api/credentials - delete credential
     router.delete("/:id").handler(com.motadata.NMSLiteUsingVertex.services.Credential::deleteCredential);
 
     return router;
