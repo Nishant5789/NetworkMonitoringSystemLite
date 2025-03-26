@@ -104,7 +104,7 @@ Here is the updated API documentation with **response examples** included where 
 | API Name                        | Method | URL with Payload                                                                                      | Description                               |
 |---------------------------------|--------|--------------------------------------------------------------------------------------------------------|-------------------------------------------|
 | Start Provision                 | POST   | `http://localhost:8080/api/object/provision/` <br> **Payload:** ```json { "ip": "192.168.0.63", "pollinterval": 1000 } ``` | Start provisioning                        |
-| Get Polling Data by Object ID   | GET    | `http://localhost:8080/api/object/pollingdata/{id}`                                                    | Get polling data for an object            |
+| Get Polling Data by Object IP   | GET    | `http://localhost:8080/api/object/pollingdata/{ip}`                                                    | Get polling data for an object            |
 | Get Object by ID                | GET    | `http://localhost:8080/api/object/{id}`                                                                | Get object information                    |
 | Get All Objects                 | GET    | `http://localhost:8080/api/object/`                                                                     | Fetch all objects                         |
 | Delete Object by ID             | DELETE | `http://localhost:8080/api/object/{id}`                                                                | Delete a specific object                  |
