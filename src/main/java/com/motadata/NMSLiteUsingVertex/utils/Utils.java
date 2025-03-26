@@ -138,6 +138,7 @@ public class Utils
         ProcessBuilder builder = new ProcessBuilder("bash", "-c", "cd /home/nishant/codeworkspace/GoLandWorkSpace/PluginEngine && /usr/local/go/bin/go run main.go");
 
         builder.redirectErrorStream(true);
+
         Process process = builder.start();
 
         new Thread(() ->
@@ -212,7 +213,7 @@ public class Utils
         {
           var credentialDataPayload = new JsonObject(obj.getString(CREDENTIAL_DATA_KEY));
 
-          JsonObject filteredObject = new JsonObject().put(IP_KEY, obj.getString(IP_KEY)).put(PORT_KEY, PORT_VALUE).put(PASSWORD_KEY, credentialDataPayload.getString(PASSWORD_KEY)).put(USERNAME_KEY, credentialDataPayload.getString(USERNAME_KEY)).put(PLUGIN_ENGINE_TYPE_KEY, PLUGIN_ENGINE_LINUX).put(OBJECT_ID_KEY, obj.getInteger(OBJECT_ID_KEY)).put(LAST_POLL_TIME_KEY, System.currentTimeMillis()).put(POLL_INTERVAL_KEY, obj.getInteger(POLL_INTERVAL_KEY));
+          JsonObject filteredObject = new JsonObject().put(IP_KEY, obj.getString(IP_KEY)).put(PORT_KEY, PORT_VALUE).put(PASSWORD_KEY, credentialDataPayload.getString(PASSWORD_KEY)).put(USERNAME_KEY, credentialDataPayload.getString(USERNAME_KEY)).put(PLUGIN_ENGINE_TYPE_KEY, PLUGIN_ENGINE_LINUX).put(OBJECT_ID_KEY, obj.getInteger(OBJECT_ID_KEY)).put(LAST_POLL_TIME_KEY, System.currentTimeMillis()).put(POLL_INTERVAL_KEY, obj.getInteger(POLL_INTERVAL_KEY)).put(FAILURE_COUNT_KEY,DEAFAULT_FAILURE_VALUE).put(OBJECT_AVAILABILITY_KEY, obj.getString(OBJECT_AVAILABILITY_KEY));
 
           objectQueue.add(filteredObject);
         }
@@ -228,11 +229,58 @@ public class Utils
   // handle update lastpolltime in objectqueue
   public static void updateObjectLastPollTimeInObjectQueue(int objectId, Long lastPollTIME)
   {
-    objectQueue.stream()
-      .filter(obj -> obj.getInteger(OBJECT_ID_KEY) == objectId)
-      .findFirst()
-      .ifPresent(obj -> obj.put(LAST_POLL_TIME_KEY, lastPollTIME));
+    objectQueue.stream().filter(obj -> obj.getInteger(OBJECT_ID_KEY) == objectId).findFirst().ifPresent(obj -> obj.put(LAST_POLL_TIME_KEY, lastPollTIME));
   }
+
+  // check whether object is down based on threshold value
+  public static boolean checkFailureThresholdExceeded(int objectId)
+  {
+    return objectQueue.stream().filter(obj -> obj.getInteger(OBJECT_ID_KEY) == objectId).anyMatch(obj -> obj.getInteger(FAILURE_COUNT_KEY) >= THRESHOLD_FAILURE_VALUE);
+  }
+
+  // check Status is up or not?
+  public static boolean isObjectStatusDown(int objectId)
+  {
+    return objectQueue.stream().filter(obj -> obj.getInteger(OBJECT_ID_KEY) == objectId).map(obj -> obj.getString(OBJECT_AVAILABILITY_KEY)).anyMatch(status -> OBJECT_AVAILABILITY_DOWN.equalsIgnoreCase(status));
+  }
+
+  public static boolean isObjectStatusUP(int objectId)
+  {
+    return objectQueue.stream().filter(obj -> obj.getInteger(OBJECT_ID_KEY) == objectId).map(obj -> obj.getString(OBJECT_AVAILABILITY_KEY)).anyMatch(status -> OBJECT_AVAILABILITY_UP.equalsIgnoreCase(status));
+  }
+
+  // update failure count based on objectId
+  public static void incrementFailureCount(int objectId)
+  {
+    objectQueue.stream().filter(obj -> obj.getInteger(OBJECT_ID_KEY) == objectId).findFirst().ifPresent(obj -> {obj.put(FAILURE_COUNT_KEY, obj.getInteger(FAILURE_COUNT_KEY) + 1);});
+  }
+
+  // reset failurethresold value zero
+  public static void resetFailureCount(int objectId)
+  {
+    objectQueue.stream().filter(obj -> obj.getInteger(OBJECT_ID_KEY) == objectId).findFirst().ifPresent(obj -> obj.put(FAILURE_COUNT_KEY, 0));
+  }
+
+  // update status in objectQueue & database
+  public static void updateStatusInObjectQueueAndDatabase(int objectId, String status)
+  {
+    // Update status in objectQueue
+    objectQueue.stream().filter(obj -> obj.getInteger(OBJECT_ID_KEY) == objectId).findFirst().ifPresent(obj -> obj.put(OBJECT_AVAILABILITY_KEY, status));
+
+    JsonObject updateObjectPayload = new JsonObject().put(OBJECT_AVAILABILITY_KEY, status);
+
+    // Update status in database
+    QueryHandler.updateByField(PROVISIONED_OBJECTS_TABLE, updateObjectPayload, OBJECT_ID_KEY, objectId)
+            .onSuccess(updated ->
+            {
+              LOGGER.info("objectID: " + objectId + " status updated to " + status + " at timestamp: " + System.currentTimeMillis());
+            })
+            .onFailure(err ->
+            {
+              LOGGER.severe("Failed to update object status to " + status + " in database for objectID: " + objectId);
+            });
+  }
+
 
   // validate payload
   public static Map<String, String> isValidPayload(String tableName, JsonObject payload)
@@ -277,7 +325,7 @@ public class Utils
       response.put(IS_VALID_KEY, "false");
       response.put(IP_ERROR, "Invalid or missing 'IP' address");
     }
-    else if (!isValidIPSAddress(payload.getString(IP_KEY)))
+    else if (!isValidIPAddress(payload.getString(IP_KEY)))
     {
       response.put(IS_VALID_KEY, "false");
       response.put(IP_ERROR, "IP address format is invalid");
@@ -366,7 +414,7 @@ public class Utils
       response.put(IS_VALID_KEY, "false");
       response.put(IP_ERROR, "Invalid or missing 'ip'");
     }
-    else if (!isValidIPSAddress(payload.getString(IP_KEY)))
+    else if (!isValidIPAddress(payload.getString(IP_KEY)))
     {
       response.put(IS_VALID_KEY, "false");
       response.put(IP_ERROR, "IP address format is invalid");
@@ -398,7 +446,7 @@ public class Utils
   }
 
   // Validate IP Address (Both IPv4 & IPv6)
-  private static boolean isValidIPSAddress(String ip)
+  public static boolean isValidIPAddress(String ip)
   {
     var ipRegex = "^((25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)$";
 

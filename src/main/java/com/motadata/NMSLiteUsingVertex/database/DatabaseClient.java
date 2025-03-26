@@ -34,30 +34,30 @@ public class DatabaseClient
     pool = Pool.pool(vertx, connectOptions, poolOptions);
 
     // Check if database exists
-    String checkDbQuery = "SELECT 1 FROM pg_database WHERE datname = 'nms_lite_19'";
+    String checkDbQuery = "SELECT 1 FROM pg_database WHERE datname = 'nms_lite_20'";
 
     pool.query(checkDbQuery).execute(ar ->
     {
       if (ar.succeeded() && ar.result().size() > 0)
       {
-        LOGGER.info("Database nms_lite_19 already exists.");
+        LOGGER.info("Database nms_lite_20 already exists.");
 
         switchToNewDatabase(vertx).onComplete(promise);
       }
       else
       {
-        LOGGER.info("Database nms_lite_19 does not exist, creating...");
+        LOGGER.info("Database nms_lite_20 does not exist, creating...");
 
-        pool.query("CREATE DATABASE nms_lite_19").execute(createAr ->
+        pool.query("CREATE DATABASE nms_lite_20").execute(createAr ->
         {
           if (createAr.succeeded())
           {
-            LOGGER.info("Database nms_lite_19 created successfully.");
+            LOGGER.info("Database nms_lite_20 created successfully.");
             switchToNewDatabase(vertx).onComplete(promise);
           }
           else
           {
-            LOGGER.warning("Failed to create database nms_lite_19: " + createAr.cause().getMessage());
+            LOGGER.warning("Failed to create database nms_lite_20: " + createAr.cause().getMessage());
             promise.fail(createAr.cause()); // ✅ Fail if DB creation fails
           }
         });
@@ -122,6 +122,7 @@ public class DatabaseClient
           object_id SERIAL PRIMARY KEY,
           ip VARCHAR(255) UNIQUE NOT NULL,
           credential_id INT NOT NULL,
+          availability_status VARCHAR(255) NOT NULL DEFAULT 'UP',
           pollinterval INT,
           CONSTRAINT fk_provisioned_credential
               FOREIGN KEY (credential_id) REFERENCES credential(credential_id)
@@ -130,14 +131,10 @@ public class DatabaseClient
 
       -- Polling Table
       CREATE TABLE IF NOT EXISTS polling_results (
-          object_id INT NOT NULL,
+          ip VARCHAR(255) NOT NULL,
           timestamp BIGINT NOT NULL,
           counters JSONB NOT NULL,
-          PRIMARY KEY (object_id, timestamp),
-
-          CONSTRAINT fk_polling_monitor
-              FOREIGN KEY (object_id) REFERENCES provisioned_objects(object_id)
-              ON DELETE CASCADE
+          PRIMARY KEY (ip, timestamp)
       );
       """;
 

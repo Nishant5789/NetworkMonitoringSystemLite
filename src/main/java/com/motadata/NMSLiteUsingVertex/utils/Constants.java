@@ -24,6 +24,8 @@ public class Constants
 
   public static final String OBJECT_ID_HEADER_PATH = "object_id";
 
+  public static final String IP_HEADER_PATH = "ip_address";
+
   public static final String CREDENTIAL_NAME_KEY = "credential_name";
 
   public static final String SYSTEM_TYPE_KEY = "system_type";
@@ -116,5 +118,17 @@ public class Constants
 
   public static final Integer MAX_POOL_SIZE = 5;
 
-  public static final String DATABASE_NAME = "nms_lite_19";
+  public static final String FAILURE_COUNT_KEY = "failure_count";
+
+  public static final Integer DEAFAULT_FAILURE_VALUE = 0;
+
+  public static final Integer THRESHOLD_FAILURE_VALUE = 5;
+
+  public static final String DATABASE_NAME = "nms_lite_20";
+
+  public static final String OBJECT_AVAILABILITY_KEY = "availability_status";
+
+  public static final String OBJECT_AVAILABILITY_UP = "UP";
+
+  public static final String OBJECT_AVAILABILITY_DOWN = "DOWN";
 }

@@ -2,10 +2,8 @@ package com.motadata.NMSLiteUsingVertex.api;
 
 import com.motadata.NMSLiteUsingVertex.Main;
 import com.motadata.NMSLiteUsingVertex.database.QueryHandler;
-import com.motadata.NMSLiteUsingVertex.services.ObjectManager;
 import com.motadata.NMSLiteUsingVertex.utils.AppLogger;
 import com.motadata.NMSLiteUsingVertex.utils.Utils;
-import io.vertx.core.Future;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
@@ -21,7 +19,6 @@ public class Object
   private static final Router router = Router.router(Main.vertx());
 
   private static final Logger LOGGER = AppLogger.getLogger();
-//  private static final Logger LOGGER =  Logger.getLogger(Object.class.getName());
 
   // return subrouter for object
   public static Router getRouter()
@@ -30,7 +27,7 @@ public class Object
     router.post("/provision").handler(Object::handleProvisioning);
 
     // GET /api/object/pollingdata/:object_id - fetch Polling data by objectId
-    router.get("/pollingdata/:object_id").handler(Object::handlePollingData);
+    router.get("/pollingdata/:ip_address").handler(Object::handlePollingData);
 
     // GET /api/object/ - get all objects with data
     router.get("/").handler(Object::getAllObjects);
@@ -103,19 +100,29 @@ public class Object
   // handle pollingData
   private static void handlePollingData(RoutingContext ctx)
   {
-    var objectId = ctx.pathParam(OBJECT_ID_HEADER_PATH);
+    var ipAddress = ctx.pathParam(IP_HEADER_PATH);
 
-    if (objectId == null || objectId.trim().isEmpty())
+    if (ipAddress == null|| ipAddress.trim().isEmpty())
     {
-      LOGGER.warning("Invalid objectId id received: " + objectId);
+      LOGGER.warning("Invalid Ip Address : empty IP is received: " + ipAddress);
 
-      var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid objectId id: Id cannot be empty");
+      var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid Ip Address : IP cannot be empty");
 
       ctx.response().setStatusCode(400).end(response.encodePrettily());
       return;
     }
 
-    QueryHandler.getAllByField(POLLING_RESULTS_TABLE, OBJECT_ID_KEY, Integer.parseInt(objectId))
+    if (!Utils.isValidIPAddress(ipAddress))
+    {
+      LOGGER.warning("Invalid IP address format received: " + ipAddress);
+
+      var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid Ip Address : IP cannot be empty");
+
+      ctx.response().setStatusCode(400).end(response.encodePrettily());
+      return;
+    }
+
+    QueryHandler.getAllByField(POLLING_RESULTS_TABLE, IP_KEY, ipAddress)
       .onSuccess(pollingRecords ->
       {
         var response = new JsonArray(pollingRecords);
