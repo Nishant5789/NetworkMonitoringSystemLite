@@ -31,18 +31,17 @@ public class Discovery extends AbstractVerticle
     var payload = message.body();
 
     var ip = payload.getString(IP_KEY);
-    var credentialId = payload.getString(CREDENTIAL_ID_KEY);
-    var port = String.valueOf(payload.getInteger(PORT_KEY));
+    var port = payload.getInteger(PORT_KEY);
 
     Utils.checkDeviceAvailability(ip, port)
-      .compose(flag ->
+      .compose(availability ->
       {
-        if (!flag)
+        if (!availability)
         {
           return Future.failedFuture("ssh service is not running or disable on provided port");
         }
 
-        return QueryHandler.getById(CREDENTIAL_TABLE, credentialId);
+        return QueryHandler.getById(CREDENTIAL_TABLE, payload.getString(CREDENTIAL_ID_KEY));
       })
       .compose(credential ->
       {
@@ -53,7 +52,7 @@ public class Discovery extends AbstractVerticle
 
         var credentialDataPayload = new JsonObject(credential.getString(CREDENTIAL_DATA_KEY));
 
-        var zmqReqPayload = new JsonObject().put(USERNAME_KEY, credentialDataPayload.getString(USERNAME_KEY)).put(PASSWORD_KEY, credentialDataPayload.getString(PASSWORD_KEY)).put(IP_KEY, ip).put(PORT_KEY, port).put(EVENT_NAME_KEY, DISCOVERY_EVENT).put(PLUGIN_ENGINE_TYPE_KEY, PLUGIN_ENGINE_LINUX);
+        var zmqReqPayload = new JsonObject().put(USERNAME_KEY, credentialDataPayload.getString(USERNAME_KEY)).put(PASSWORD_KEY, credentialDataPayload.getString(PASSWORD_KEY)).put(IP_KEY, ip).put(PORT_KEY, String.valueOf(port)).put(EVENT_NAME_KEY, DISCOVERY_EVENT).put(PLUGIN_ENGINE_TYPE_KEY, PLUGIN_ENGINE_LINUX);
 
          return Main.vertx().eventBus().<JsonObject>request(ZMQ_REQUEST_EVENT, zmqReqPayload);
       })
@@ -61,10 +60,9 @@ public class Discovery extends AbstractVerticle
       {
         if(jsonResponse.body().getString(STATUS_KEY).equals(STATUS_RESPONSE_SUCCESS))
         {
-          var updatePayload = new JsonObject().put(DISCOVERY_STATUS_KEY,"complete");
-
-          return QueryHandler.updateByField(DISCOVERY_TABLE, updatePayload, DISCOVERY_ID_KEY, credentialId);
+          return QueryHandler.updateByField(DISCOVERY_TABLE, new JsonObject().put(DISCOVERY_STATUS_KEY,"complete"), DISCOVERY_ID_KEY, payload.getInteger(CREDENTIAL_ID_KEY));
         }
+
         return Future.failedFuture("ssh connection is unsuccessful");
       })
       .onSuccess(response ->
@@ -73,7 +71,7 @@ public class Discovery extends AbstractVerticle
       })
       .onFailure(err ->
       {
-        LOGGER.warning("Error during discovery for IP: " + ip + " Port: "+ port +" "+ err.getMessage());
+        LOGGER.warning("Error during discovery for IP: " + ip + " Port: " + port + " " + err.getMessage());
 
         message.reply("Discovery failed: "+ err.getMessage());
       });

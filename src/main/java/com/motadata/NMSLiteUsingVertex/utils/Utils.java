@@ -56,7 +56,7 @@ public class Utils
           return false;
         }
 
-        return output != null && output.trim().equals("true");
+        return output != null && output.trim().equals(TRUE_VALUE);
       }
       catch (IOException | InterruptedException e)
       {
@@ -68,12 +68,12 @@ public class Utils
   }
 
   // check port is reachable
-  public static Future<Boolean> checkPort(String ip, String port)
+  public static Future<Boolean> checkPort(String ip, Integer port)
   {
     Promise<Boolean> promise = Promise.promise();
     try
     {
-      Main.vertx().createNetClient().connect(Integer.parseInt(port), ip, res ->
+      Main.vertx().createNetClient().connect(port, ip, res ->
       {
         if (res.succeeded())
         {
@@ -100,7 +100,7 @@ public class Utils
   }
 
   // check device reachability
-  public static Future<Boolean> checkDeviceAvailability(String ip, String port)
+  public static Future<Boolean> checkDeviceAvailability(String ip, Integer port)
   {
     try
     {
@@ -126,7 +126,7 @@ public class Utils
     }
   }
 
-  // Start GoPlugin
+  // Start GoPlugin using ProcessBuilder
   public static Future<String> startGOPlugin()
   {
     Promise<String> promise = Promise.promise();
@@ -181,7 +181,7 @@ public class Utils
     return promise.future();
   }
 
-  // add objectwithdata in objectqueue
+  // add objectWithData in objectQueue
   public static void addObjectInQueue(JsonObject obj)
   {
     objectQueue.add(obj);
@@ -199,24 +199,21 @@ public class Utils
     objectQueue.removeIf(obj -> obj.getInteger(OBJECT_ID_KEY) == objectId);
   }
 
-  // update objectqueue from database
+  // update ObjectQueue from database
   public static Future<Object> updateObjectQueueFromDatabase()
   {
     return QueryHandler.getAllWithJoinTable(PROVISIONED_OBJECTS_TABLE, CREDENTIAL_TABLE, CREDENTIAL_ID_KEY)
-      .onSuccess(result ->
+      .onSuccess(objectResult ->
       {
-        LOGGER.info("Received object  from DB: " + (result != null ? result.size() : 0));
+        LOGGER.info("Received object  from DB: " + (objectResult != null ? objectResult.size() : 0));
 
         objectQueue.clear(); // Clear the existing queue before updating
 
-        for (JsonObject obj : result)
+        for (JsonObject objectData : objectResult)
         {
-          var credentialDataPayload = new JsonObject(obj.getString(CREDENTIAL_DATA_KEY));
-
-          JsonObject filteredObject = new JsonObject().put(IP_KEY, obj.getString(IP_KEY)).put(PORT_KEY, PORT_VALUE).put(PASSWORD_KEY, credentialDataPayload.getString(PASSWORD_KEY)).put(USERNAME_KEY, credentialDataPayload.getString(USERNAME_KEY)).put(PLUGIN_ENGINE_TYPE_KEY, PLUGIN_ENGINE_LINUX).put(OBJECT_ID_KEY, obj.getInteger(OBJECT_ID_KEY)).put(LAST_POLL_TIME_KEY, System.currentTimeMillis()).put(POLL_INTERVAL_KEY, obj.getInteger(POLL_INTERVAL_KEY)).put(FAILURE_COUNT_KEY,DEAFAULT_FAILURE_VALUE).put(OBJECT_AVAILABILITY_KEY, obj.getString(OBJECT_AVAILABILITY_KEY));
-
-          objectQueue.add(filteredObject);
+          objectQueue.add(addToQueue(objectData));
         }
+
         LOGGER.severe("Object queue updated successfully: " + objectQueue);
       })
       .mapEmpty()
@@ -226,7 +223,7 @@ public class Utils
       });
   }
 
-  // handle update lastpolltime in objectqueue
+  // handle update lastPollTime in objectQueue
   public static void updateObjectLastPollTimeInObjectQueue(int objectId, Long lastPollTIME)
   {
     objectQueue.stream().filter(obj -> obj.getInteger(OBJECT_ID_KEY) == objectId).findFirst().ifPresent(obj -> obj.put(LAST_POLL_TIME_KEY, lastPollTIME));
@@ -244,6 +241,7 @@ public class Utils
     return objectQueue.stream().filter(obj -> obj.getInteger(OBJECT_ID_KEY) == objectId).map(obj -> obj.getString(OBJECT_AVAILABILITY_KEY)).anyMatch(status -> OBJECT_AVAILABILITY_DOWN.equalsIgnoreCase(status));
   }
 
+  // check Status is down or not?
   public static boolean isObjectStatusUP(int objectId)
   {
     return objectQueue.stream().filter(obj -> obj.getInteger(OBJECT_ID_KEY) == objectId).map(obj -> obj.getString(OBJECT_AVAILABILITY_KEY)).anyMatch(status -> OBJECT_AVAILABILITY_UP.equalsIgnoreCase(status));
@@ -255,7 +253,7 @@ public class Utils
     objectQueue.stream().filter(obj -> obj.getInteger(OBJECT_ID_KEY) == objectId).findFirst().ifPresent(obj -> {obj.put(FAILURE_COUNT_KEY, obj.getInteger(FAILURE_COUNT_KEY) + 1);});
   }
 
-  // reset failurethresold value zero
+  // reset failureThreeSold value zero
   public static void resetFailureCount(int objectId)
   {
     objectQueue.stream().filter(obj -> obj.getInteger(OBJECT_ID_KEY) == objectId).findFirst().ifPresent(obj -> obj.put(FAILURE_COUNT_KEY, 0));
@@ -281,7 +279,6 @@ public class Utils
             });
   }
 
-
   // validate payload
   public static Map<String, String> isValidPayload(String tableName, JsonObject payload)
   {
@@ -301,7 +298,7 @@ public class Utils
 
       default:
         response = new HashMap<>();
-        response.put(IS_VALID_KEY, "false");
+        response.put(IS_VALID_KEY, FALSE_VALUE);
         response.put(ERROR_KEY, "Invalid table name");
     }
     return response;
@@ -311,40 +308,48 @@ public class Utils
   private static Map<String, String> validateDiscoveryPayload(JsonObject payload)
   {
     Map<String, String> response = new HashMap<>();
-    response.put(IS_VALID_KEY, "true");
 
+    response.put(IS_VALID_KEY, TRUE_VALUE); // Default to valid
+
+    // Check if payload is null
     if (payload == null)
     {
-      response.put(IS_VALID_KEY, "false");
-      response.put(ERROR_KEY, "Payload is null");
-      return response;
+      return invalidate(response, "Payload is null");
     }
 
-    if (!payload.containsKey(IP_KEY) || !(payload.getValue(IP_KEY) instanceof String) || payload.getString(IP_KEY).trim().isEmpty())
+    // Validate IP address
+    if (!isValidString(payload, IP_KEY))
     {
-      response.put(IS_VALID_KEY, "false");
+      response.put(IS_VALID_KEY, FALSE_VALUE);
       response.put(IP_ERROR, "Invalid or missing 'IP' address");
     }
     else if (!isValidIPAddress(payload.getString(IP_KEY)))
     {
-      response.put(IS_VALID_KEY, "false");
+      response.put(IS_VALID_KEY, FALSE_VALUE);
       response.put(IP_ERROR, "IP address format is invalid");
     }
 
-    if (!payload.containsKey("port") || !(payload.getValue("port") instanceof Integer))
+    // Validate port
+    if (!isValidInteger(payload, PORT_KEY))
     {
-      response.put(IS_VALID_KEY, "false");
+      response.put(IS_VALID_KEY, FALSE_VALUE);
       response.put(PORT_ERROR, "Invalid or missing 'port'");
     }
-    else if (payload.getInteger("port") < 0 || payload.getInteger("port") > 65535)
+    else
     {
-      response.put(IS_VALID_KEY, "false");
-      response.put(PORT_ERROR, "Port must be between 0 and 65535");
+      int port = payload.getInteger(PORT_KEY);
+
+      if (port < 0 || port > 65535)
+      {
+        response.put(IS_VALID_KEY, FALSE_VALUE);
+        response.put(PORT_ERROR, "Port must be between 0 and 65535");
+      }
     }
 
-    if (!payload.containsKey(CREDENTIAL_ID_KEY) || !(payload.getValue(CREDENTIAL_ID_KEY) instanceof Integer))
+    // Validate credential_id
+    if (!isValidInteger(payload, CREDENTIAL_ID_KEY))
     {
-      response.put(IS_VALID_KEY, "false");
+      response.put(IS_VALID_KEY, FALSE_VALUE);
       response.put(CREDENTIAL_ID_ERROR, "Invalid or missing 'credential_id'");
     }
 
@@ -355,42 +360,42 @@ public class Utils
   private static Map<String, String> validateCredentialPayload(JsonObject payload)
   {
     Map<String, String> response = new HashMap<>();
-    response.put(IS_VALID_KEY, "true");
+    response.put(IS_VALID_KEY, TRUE_VALUE); // Use original constant
 
     if (payload == null)
     {
-      response.put(IS_VALID_KEY, "false");
-      response.put(ERROR_KEY, "Payload is null");
-      return response;
+      return invalidate(response, "Payload is null");
     }
 
-    if (!(payload.containsKey(CREDENTIAL_NAME_KEY) && payload.getValue(CREDENTIAL_NAME_KEY) instanceof String && !payload.getString(CREDENTIAL_NAME_KEY).trim().isEmpty()))
+    if (!isValidString(payload, CREDENTIAL_NAME_KEY))
     {
-      response.put(IS_VALID_KEY, "false");
       response.put(CREDENTIAL_NAME_ERROR, "Invalid or missing 'CredentialName'");
+      response.put(IS_VALID_KEY, FALSE_VALUE);
     }
 
-    if (!(payload.containsKey(SYSTEM_TYPE_KEY) && payload.getValue(SYSTEM_TYPE_KEY) instanceof String && !payload.getString(SYSTEM_TYPE_KEY).trim().isEmpty()))
+    if (!isValidString(payload, SYSTEM_TYPE_KEY))
     {
-      response.put(IS_VALID_KEY, "false");
       response.put(SYSTEM_TYPE_ERROR, "Invalid or missing 'SystemType'");
+      response.put(IS_VALID_KEY, FALSE_VALUE);
     }
 
-    if(payload.containsKey(CREDENTIAL_DATA_KEY))
+    if (!payload.containsKey(CREDENTIAL_DATA_KEY) || !(payload.getValue(CREDENTIAL_DATA_KEY) instanceof JsonObject))
     {
-        var credentialDataPayload = payload.getJsonObject(CREDENTIAL_DATA_KEY);
+      return invalidate(response, "Invalid or missing 'credential_data'");
+    }
 
-        if (!(credentialDataPayload.containsKey(USERNAME_KEY) && credentialDataPayload.getValue(USERNAME_KEY) instanceof String && !credentialDataPayload.getString(USERNAME_KEY).trim().isEmpty()))
-        {
-          response.put(IS_VALID_KEY, "false");
-          response.put(USERNAME_ERROR, "Invalid or missing 'CredentialUsername'");
-        }
+    var credentialData = payload.getJsonObject(CREDENTIAL_DATA_KEY);
 
-        if (!(credentialDataPayload.containsKey(PASSWORD_KEY) && credentialDataPayload.getValue(PASSWORD_KEY) instanceof String && !credentialDataPayload.getString(PASSWORD_KEY).trim().isEmpty()))
-        {
-          response.put(IS_VALID_KEY, "false");
-          response.put(PASSWORD_ERROR, "Invalid or missing 'CredentialPassword'");
-        }
+    if (!isValidString(credentialData, USERNAME_KEY))
+    {
+      response.put(USERNAME_ERROR, "Invalid or missing 'CredentialUsername'");
+      response.put(IS_VALID_KEY, FALSE_VALUE);
+    }
+
+    if (!isValidString(credentialData, PASSWORD_KEY))
+    {
+      response.put(PASSWORD_ERROR, "Invalid or missing 'CredentialPassword'");
+      response.put(IS_VALID_KEY, FALSE_VALUE);
     }
 
     return response;
@@ -400,89 +405,102 @@ public class Utils
   private static Map<String, String> validateProvisionObjectPayload(JsonObject payload)
   {
     Map<String, String> response = new HashMap<>();
-    response.put(IS_VALID_KEY, "true");
+    response.put(IS_VALID_KEY, TRUE_VALUE); // Default to valid
 
-    if (payload == null)
+    // Check if payload is null
+    if (payload == null) 
     {
-      response.put(IS_VALID_KEY, "false");
-      response.put(ERROR_KEY, "Payload is null");
-      return response;
+      return invalidate(response, "Payload is null");
     }
 
-    if (!payload.containsKey(IP_KEY) || !(payload.getValue(IP_KEY) instanceof String))
+    // Validate IP address
+    if (!isValidString(payload, IP_KEY)) 
     {
-      response.put(IS_VALID_KEY, "false");
+      response.put(IS_VALID_KEY, FALSE_VALUE);
       response.put(IP_ERROR, "Invalid or missing 'ip'");
     }
-    else if (!isValidIPAddress(payload.getString(IP_KEY)))
+    else if (!isValidIPAddress(payload.getString(IP_KEY))) 
     {
-      response.put(IS_VALID_KEY, "false");
+      response.put(IS_VALID_KEY, FALSE_VALUE);
       response.put(IP_ERROR, "IP address format is invalid");
     }
 
-    if (!payload.containsKey(POLL_INTERVAL_KEY) || !(payload.getValue(POLL_INTERVAL_KEY) instanceof Integer))
+    // Validate pollInterval
+    if (!isValidInteger(payload, POLL_INTERVAL_KEY)) 
     {
-      response.put(IS_VALID_KEY, "false");
+      response.put(IS_VALID_KEY, FALSE_VALUE);
       response.put(POLLINTERVAL_ERROR, "Invalid or missing 'pollInterval'");
-    }
-    else
+    } 
+    else 
     {
-      try
+      if (payload.getInteger(POLL_INTERVAL_KEY) <= 0)
       {
-        int pollInterval = payload.getInteger(POLL_INTERVAL_KEY);
-        if (pollInterval <= 0)
-        {
-          response.put(IS_VALID_KEY, "false");
-          response.put(POLLINTERVAL_ERROR, "'pollInterval' must be a positive number");
-        }
-      }
-      catch (NumberFormatException e)
-      {
-        response.put(IS_VALID_KEY, "false");
-        response.put(POLLINTERVAL_ERROR, "'pollInterval' must be a numeric string");
+        response.put(IS_VALID_KEY, FALSE_VALUE);
+        response.put(POLLINTERVAL_ERROR, "'pollInterval' must be a positive number");
       }
     }
+
     return response;
   }
-
+  
   // Validate IP Address (Both IPv4 & IPv6)
   public static boolean isValidIPAddress(String ip)
   {
-    var ipRegex = "^((25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)$";
+    return Pattern.compile("^((25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)$").matcher(ip).matches();
+  }
 
-    return Pattern.compile(ipRegex).matcher(ip).matches();
+  // Helper method to check if a string field is valid
+  private static boolean isValidString(JsonObject json, String key) 
+  {
+    return json.containsKey(key) && json.getValue(key) instanceof String && !json.getString(key).trim().isEmpty();
+  }
+
+  // Helper method to check if an integer field is valid
+  private static boolean isValidInteger(JsonObject json, String key)
+  {
+    return json.containsKey(key) && json.getValue(key) instanceof Integer;
+  }
+
+  // Helper method to invalidate response with an error message
+  private static Map<String, String> invalidate(Map<String, String> response, String errorMessage) 
+  {
+    response.put(IS_VALID_KEY, FALSE_VALUE);
+    response.put(ERROR_KEY, errorMessage);
+    return response;
   }
 
   // format invalid response and return response
   public static String formatInvalidResponse(Map<String, String> response)
   {
-    return response.entrySet().stream()
-      .filter(entry -> !entry.getKey().equals(IS_VALID_KEY))
-      .map(entry -> entry.getKey() + ": " + entry.getValue())
-      .collect(Collectors.joining(", "));
+    return response.entrySet().stream().filter(entry -> !entry.getKey().equals(IS_VALID_KEY)).map(entry -> entry.getKey() + ": " + entry.getValue()).collect(Collectors.joining(", "));
   }
 
   // create send responseObject
   public static JsonObject createResponse(String status, String statusMsg)
   {
-    return new JsonObject()
-      .put("status", status)
-      .put("statusMsg", statusMsg);
+    return new JsonObject().put(STATUS_KEY, status).put(STATUS_MSG_KEY, statusMsg);
+  }
+
+  // create object to add in ObjectQueue
+  private static JsonObject addToQueue(JsonObject obj)
+  {
+    JsonObject credentialDataPayload = new JsonObject(obj.getString(CREDENTIAL_DATA_KEY));
+
+    return new JsonObject().put(IP_KEY, obj.getString(IP_KEY)).put(PORT_KEY, PORT_VALUE).put(PASSWORD_KEY, credentialDataPayload.getString(PASSWORD_KEY)).put(USERNAME_KEY, credentialDataPayload.getString(USERNAME_KEY)).put(PLUGIN_ENGINE_TYPE_KEY, PLUGIN_ENGINE_LINUX).put(OBJECT_ID_KEY, obj.getInteger(OBJECT_ID_KEY)).put(LAST_POLL_TIME_KEY, System.currentTimeMillis()).put(POLL_INTERVAL_KEY, obj.getInteger(POLL_INTERVAL_KEY)).put(FAILURE_COUNT_KEY, DEAFAULT_FAILURE_VALUE).put(OBJECT_AVAILABILITY_KEY, obj.getString(OBJECT_AVAILABILITY_KEY));
   }
 
   // replace underscore to dot in counters keys
   public static JsonObject replaceUnderscoreWithDot(JsonObject input)
   {
-    JsonObject output = new JsonObject();
+    var output = new JsonObject();
     for (Map.Entry<String, Object> entry : input)
     {
-      String newKey = entry.getKey().replace("_", ".");
-      output.put(newKey, entry.getValue());
+      output.put(entry.getKey().replace("_", "."), entry.getValue());
     }
     return output;
   }
 
-  // get the tableId from tablename
+  // get the tableId from tableName
   public static String getIdColumnByTable(String tableName)
   {
     return switch (tableName)

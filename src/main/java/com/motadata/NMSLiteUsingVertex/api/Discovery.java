@@ -54,9 +54,7 @@ public class Discovery
     {
       LOGGER.warning("Invalid discovery id received: " + credentialId);
 
-      var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid discovery id: Id cannot be empty");
-
-      ctx.response().setStatusCode(400).end(response.encodePrettily());
+      ctx.response().setStatusCode(400).end(Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid discovery id: Id cannot be empty").encodePrettily());
 
       return;
     }
@@ -70,9 +68,7 @@ public class Discovery
         {
           LOGGER.warning("Credential not found: " + credentialId);
 
-          var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Credential not found");
-
-          ctx.response().setStatusCode(404).end(response.encodePrettily());
+          ctx.response().setStatusCode(404).end(Utils.createResponse(STATUS_RESPONSE_FAIIED, "Credential not found").encodePrettily());
         }
         else
         {
@@ -85,9 +81,7 @@ public class Discovery
       {
         LOGGER.severe("Failed to find discovery: " + err.getMessage());
 
-        var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Credential not found");
-
-        ctx.response().setStatusCode(500).end(response.encodePrettily());
+        ctx.response().setStatusCode(500).end(Utils.createResponse(STATUS_RESPONSE_FAIIED, "Credential not found").encodePrettily());
       });
   }
 
@@ -101,17 +95,13 @@ public class Discovery
       {
         LOGGER.info("Fetched discovery successfully");
 
-        var response = new JsonArray(discoveryRecords);
-
-        ctx.response().end(response.encodePrettily());
+        ctx.response().end(new JsonArray(discoveryRecords).encodePrettily());
       })
       .onFailure(err ->
       {
         LOGGER.severe("Failed to fetch discovery: " + err.getMessage());
 
-        var response = Utils.createResponse(STATUS_RESPONSE_ERROR, "Failed to fetch discovery");
-
-        ctx.response().setStatusCode(500).end(response.encodePrettily());
+        ctx.response().setStatusCode(500).end(Utils.createResponse(STATUS_RESPONSE_ERROR, "Failed to fetch discovery").encodePrettily());
       });
   }
 
@@ -137,26 +127,15 @@ public class Discovery
       {
         LOGGER.info("discovery saved successfully");
 
-        var response = Utils.createResponse(STATUS_RESPONSE_SUCCESS, "discovery saved successfully.");
-
-        ctx.response().setStatusCode(201).end(response.encodePrettily());
+        ctx.response().setStatusCode(201).end(Utils.createResponse(STATUS_RESPONSE_SUCCESS, "discovery saved successfully.").encodePrettily());
       })
       .onFailure(err ->
       {
         LOGGER.severe("Failed to save discovery: " + err.getMessage());
 
-        JsonObject errResponse;
+        var errMessage = err.getMessage().contains("violates foreign key constraint") ? "Failed to save discovery: provided credentialId not exists": "Failed to save discovery";
 
-        if(err.getMessage().contains("violates foreign key constraint"))
-        {
-           errResponse = Utils.createResponse(STATUS_RESPONSE_ERROR, "Failed to save discovery: provided credentialId not exists");
-        }
-        else
-        {
-          errResponse = Utils.createResponse(STATUS_RESPONSE_ERROR, "Failed to save discovery");
-        }
-
-        ctx.response().setStatusCode(500).end(errResponse.encodePrettily());
+        ctx.response().setStatusCode(500).end(Utils.createResponse(STATUS_RESPONSE_ERROR, errMessage).encodePrettily());
       });
   }
 
@@ -171,9 +150,7 @@ public class Discovery
     {
       LOGGER.warning("Invalid discovery id received: " + id);
 
-      var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid discovery id: id cannot be empty");
-
-      ctx.response().setStatusCode(400).end(response.encodePrettily());
+      ctx.response().setStatusCode(400).end(Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid discovery id: id cannot be empty").encodePrettily());
       return;
     }
 
@@ -195,34 +172,24 @@ public class Discovery
           return Future.failedFuture(reply.body().toString());
         }
 
-        var updatePayload = new JsonObject().put(DISCOVERY_STATUS_KEY, STATUS_COMPLETED);
-
-        return QueryHandler.updateByField(DISCOVERY_TABLE, updatePayload, DISCOVERY_ID_KEY, id)
+        return QueryHandler.updateByField(DISCOVERY_TABLE, new JsonObject().put(DISCOVERY_STATUS_KEY, STATUS_COMPLETED), DISCOVERY_ID_KEY, id)
           .map(v -> reply.body());
       })
       .onSuccess(replyBody ->
       {
-        var responce = Utils.createResponse(STATUS_RESPONSE_SUCCESS, replyBody.toString());
-
-        ctx.response().setStatusCode(200).end(responce.encodePrettily());
+        ctx.response().setStatusCode(200).end(Utils.createResponse(STATUS_RESPONSE_SUCCESS, replyBody.toString()).encodePrettily());
       })
       .onFailure(err ->
       {
-        var updatePayload = new JsonObject().put(DISCOVERY_STATUS_KEY, STATUS_RESPONSE_FAIIED);
-
-        QueryHandler.updateByField(DISCOVERY_TABLE, updatePayload, DISCOVERY_ID_KEY, id).map(v -> err.getMessage())
+        QueryHandler.updateByField(DISCOVERY_TABLE, new JsonObject().put(DISCOVERY_STATUS_KEY, STATUS_RESPONSE_FAIIED), DISCOVERY_ID_KEY, id).map(v -> err.getMessage())
           .onSuccess(errMsg ->
             {
-              var failedResponse = Utils.createResponse(STATUS_RESPONSE_FAIIED, errMsg);
-
-              ctx.response().setStatusCode(500).end(failedResponse.encodePrettily());
-          })
-          .onFailure(updateError ->
-          {
-            var failedResponse = Utils.createResponse(STATUS_RESPONSE_FAIIED, updateError.getMessage());
-
-            ctx.response().setStatusCode(500).end(failedResponse.encodePrettily());
-          });
+              ctx.response().setStatusCode(500).end(Utils.createResponse(STATUS_RESPONSE_FAIIED, errMsg).encodePrettily());
+            })
+            .onFailure(dbErrMsg ->
+            {
+              ctx.response().setStatusCode(500).end(Utils.createResponse(STATUS_RESPONSE_FAIIED, dbErrMsg.getMessage()).encodePrettily());
+            });
       });
   }
 
@@ -235,9 +202,7 @@ public class Discovery
     {
       LOGGER.warning("Invalid discovery id received: " + discoveryId);
 
-      var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid discovery id: id cannot be empty");
-
-      ctx.response().setStatusCode(400).end(response.encodePrettily());
+      ctx.response().setStatusCode(400).end(Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid discovery id: id cannot be empty").encodePrettily());
 
       return;
     }
@@ -248,9 +213,7 @@ public class Discovery
     {
       LOGGER.warning("payload is empty");
 
-      var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid payload: payload is empty");
-
-      ctx.response().setStatusCode(400).end(response.encodePrettily());
+      ctx.response().setStatusCode(400).end(Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid payload: payload is empty").encodePrettily());
       return;
     }
 
@@ -261,17 +224,13 @@ public class Discovery
       {
         LOGGER.info("Discovery updated successfully for id: " + discoveryId);
 
-        var response = Utils.createResponse(STATUS_RESPONSE_SUCCESS, "Discovery updated successfully");
-
-        ctx.response().setStatusCode(200).end(response.encodePrettily());
+        ctx.response().setStatusCode(200).end(Utils.createResponse(STATUS_RESPONSE_SUCCESS, "Discovery updated successfully").encodePrettily());
       })
       .onFailure(err ->
       {
         LOGGER.severe("Failed to save discovery: " + err.getMessage());
 
-        var response = Utils.createResponse(STATUS_RESPONSE_ERROR, "Failed to save discovery");
-
-        ctx.response().setStatusCode(500).end(response.encodePrettily());
+        ctx.response().setStatusCode(500).end(Utils.createResponse(STATUS_RESPONSE_ERROR, "Failed to save discovery").encodePrettily());
       });
   }
 
@@ -287,26 +246,20 @@ public class Discovery
         {
           LOGGER.info("discovery deleted successfully");
 
-          var response = new JsonObject().put(STATUS_KEY, STATUS_RESPONSE_SUCCESS).put("statusMsg", "discovery deleted Sucessfully");
-
-          ctx.response().setStatusCode(200).end(response.encodePrettily());
+          ctx.response().setStatusCode(200).end(new JsonObject().put(STATUS_KEY, STATUS_RESPONSE_SUCCESS).put(STATUS_MSG_KEY, "discovery deleted Sucessfully").encodePrettily());
         }
         else
         {
           LOGGER.info("No matching record found");
 
-          var response = new JsonObject().put(STATUS_KEY, STATUS_RESPONSE_SUCCESS).put("statusMsg", "No matching record found");
-
-          ctx.response().setStatusCode(200).end(response.encodePrettily());
+          ctx.response().setStatusCode(200).end(new JsonObject().put(STATUS_KEY, STATUS_RESPONSE_SUCCESS).put("statusMsg", "No matching record found").encodePrettily());
         }
       })
       .onFailure(err ->
       {
         LOGGER.severe("Failed to find discovery: " + err.getMessage());
 
-        var response = Utils.createResponse(STATUS_RESPONSE_ERROR, "Database query failed");
-
-        ctx.response().setStatusCode(500).end(response.encodePrettily());
+        ctx.response().setStatusCode(500).end(Utils.createResponse(STATUS_RESPONSE_ERROR, "Database query failed").encodePrettily());
       });
   }
 }

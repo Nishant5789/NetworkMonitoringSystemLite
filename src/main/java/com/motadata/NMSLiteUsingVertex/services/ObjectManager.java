@@ -59,19 +59,15 @@ public class ObjectManager extends AbstractVerticle
           return Future.failedFuture("Discovery is incomplete for your provided IP");
         }
 
-        var credentialDataPayload = new JsonObject(discoveryRecord.getString(CREDENTIAL_DATA_KEY));
+        var objectPayload = createObject(discoveryRecord, pollInterval);
 
-        var objectPayload = createObject(credentialDataPayload, discoveryRecord, pollInterval);
-
-        var provisionObjectPayload = createProvisionObjectPayload(discoveryRecord, pollInterval);
-
-        return QueryHandler.save(PROVISIONED_OBJECTS_TABLE, provisionObjectPayload).map(v-> objectPayload);
+        return QueryHandler.save(PROVISIONED_OBJECTS_TABLE, createProvisionObjectPayload(discoveryRecord, pollInterval)).map(v-> objectPayload);
       })
       .compose(objectPayload ->
       {
         LOGGER.info("Provisioned object successfully created for IP: " + ip);
 
-        return QueryHandler.getByField(PROVISIONED_OBJECTS_TABLE, IP_KEY, ip).map(provisionedObjectRecord -> objectPayload.put(OBJECT_ID_KEY,provisionedObjectRecord.getInteger(OBJECT_ID_KEY)));
+        return QueryHandler.getByField(PROVISIONED_OBJECTS_TABLE, IP_KEY, ip).map(provisionedObjectRecord -> objectPayload.put(OBJECT_ID_KEY, provisionedObjectRecord.getInteger(OBJECT_ID_KEY)));
       })
       .onSuccess(objectPayload ->
       {
@@ -92,19 +88,15 @@ public class ObjectManager extends AbstractVerticle
   // schedule object polling
   private void handleObjectScheduling()
   {
-    Main.vertx().setPeriodic(2000, timeId ->
+    Main.vertx().setTimer(20000, timeId ->
     {
       LOGGER.info("Polling is started, objectQueue: " + Utils.getObjectQueue());
-
-      var currentTime = System.currentTimeMillis();
 
       var objectToPoll = new JsonArray();
 
       for (JsonObject object : Utils.getObjectQueue())
       {
-        var lastPollTime = object.getLong(LAST_POLL_TIME_KEY);
-
-        var timeSinceLastPoll = currentTime - lastPollTime;
+        var timeSinceLastPoll = System.currentTimeMillis() - object.getLong(LAST_POLL_TIME_KEY);
 
         if (timeSinceLastPoll >= object.getInteger(POLL_INTERVAL_KEY))
         {
@@ -119,10 +111,12 @@ public class ObjectManager extends AbstractVerticle
   }
 
  //create object with data to store on objectQueue
-  private JsonObject createObject(JsonObject credentialDataPayload, JsonObject discoveryRecord, Integer pollInterval)
+  private JsonObject createObject(JsonObject discoveryRecord, Integer pollInterval)
   {
-    return new JsonObject().put(USERNAME_KEY, credentialDataPayload.getString(USERNAME_KEY)).put(PASSWORD_KEY, credentialDataPayload.getString(PASSWORD_KEY)).put(IP_KEY, discoveryRecord.getString(IP_KEY)).put(PORT_KEY, discoveryRecord.getString(PORT_KEY)).put(PLUGIN_ENGINE_TYPE_KEY, PLUGIN_ENGINE_LINUX).put(LAST_POLL_TIME_KEY, System.currentTimeMillis()).put(POLL_INTERVAL_KEY, pollInterval).put(FAILURE_COUNT_KEY,DEAFAULT_FAILURE_VALUE).put(OBJECT_AVAILABILITY_KEY,OBJECT_AVAILABILITY_UP);
-  }
+   JsonObject credentialDataPayload = new JsonObject(discoveryRecord.getString(CREDENTIAL_DATA_KEY));
+
+   return new JsonObject().put(USERNAME_KEY, credentialDataPayload.getString(USERNAME_KEY)).put(PASSWORD_KEY, credentialDataPayload.getString(PASSWORD_KEY)).put(IP_KEY, discoveryRecord.getString(IP_KEY)).put(PORT_KEY, discoveryRecord.getString(PORT_KEY)).put(PLUGIN_ENGINE_TYPE_KEY, PLUGIN_ENGINE_LINUX).put(LAST_POLL_TIME_KEY, System.currentTimeMillis()).put(POLL_INTERVAL_KEY, pollInterval).put(FAILURE_COUNT_KEY, DEAFAULT_FAILURE_VALUE).put(OBJECT_AVAILABILITY_KEY, OBJECT_AVAILABILITY_UP);
+ }
 
   //create provision_object  store on provisioned_objectstable on database
   private JsonObject createProvisionObjectPayload(JsonObject discoveryRecord, Integer pollInterval)
