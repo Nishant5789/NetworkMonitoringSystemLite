@@ -30,25 +30,20 @@ public class QueryHandler
 
     StringBuilder placeholders = new StringBuilder();
 
-    Tuple tuple = Tuple.tuple();
+    var tuple = Tuple.tuple();
 
     int index = 1;
 
     for (Map.Entry<String, Object> entry : payload.getMap().entrySet())
     {
-      String column = entry.getKey();
       Object value = entry.getValue();
 
-      columns.append(column);
+      columns.append(entry.getKey());
       placeholders.append("$").append(index++);
 
-      if (value instanceof Map)
+      if (value instanceof Map || value instanceof List)
       {
-        tuple.addValue(new JsonObject((Map<String, Object>) value).encode());
-      }
-      else if (value instanceof List)
-      {
-        tuple.addValue(new JsonArray((List<?>) value).encode());
+        tuple.addValue(value instanceof Map ? new JsonObject((Map<String, Object>) value).encode() : new JsonArray((List<?>) value).encode());
       }
       else
       {
@@ -62,9 +57,7 @@ public class QueryHandler
       }
     }
 
-    String query = String.format("INSERT INTO %s (%s) VALUES (%s)", tableName, columns, placeholders);
-
-    return pool.preparedQuery(query)
+    return pool.preparedQuery(String.format("INSERT INTO %s (%s) VALUES (%s)", tableName, columns, placeholders))
       .execute(tuple)
       .mapEmpty();
   }
@@ -72,9 +65,7 @@ public class QueryHandler
   // Generalized SELECT ALL
   public static Future<List<JsonObject>> getAll(String tableName)
   {
-    String query = String.format("SELECT * FROM %s", tableName);
-
-    return pool.query(query)
+    return pool.query(String.format("SELECT * FROM %s", tableName))
       .execute()
       .map(rows ->
       {
@@ -82,12 +73,10 @@ public class QueryHandler
 
         for (Row row : rows)
         {
-          JsonObject obj = new JsonObject();
+          var obj = new JsonObject();
           for (int i = 0; i < row.size(); i++)
           {
-            String column = row.getColumnName(i);
-            Object value = row.getValue(i);
-            obj.put(column, value);
+            obj.put(row.getColumnName(i), row.getValue(i));
           }
           results.add(obj);
         }
@@ -98,11 +87,7 @@ public class QueryHandler
   // Generalized SELECT BY CONDITION
   public static Future<JsonObject> getByField(String tableName, String fieldName, String fieldvalue)
   {
-    var condition = String.format("%s = '%s'",fieldName, fieldvalue);
-
-    var query = String.format("SELECT * FROM %s WHERE %s", tableName, condition);
-
-    return pool.preparedQuery(query)
+    return pool.preparedQuery(String.format("SELECT * FROM %s WHERE %s", tableName, String.format("%s = '%s'",fieldName, fieldvalue)))
       .execute()
       .map(rows ->
       {
@@ -110,14 +95,11 @@ public class QueryHandler
 
         Row row = rows.iterator().next();
 
-        JsonObject obj = new JsonObject();
+        var obj = new JsonObject();
 
         for (int i = 0; i < row.size(); i++)
         {
-          String column = row.getColumnName(i);
-          Object val = row.getValue(i);
-
-          obj.put(column, val);
+          obj.put(row.getColumnName(i), row.getValue(i));
         }
         return obj;
       });
@@ -132,29 +114,19 @@ public class QueryHandler
   // Generalized UPDATE : find by field & update
   public static Future<Void> updateByField(String tableName, JsonObject payload, String fieldName, Object fieldvalue)
   {
-    var condition = String.format("%s = '%s'",fieldName, fieldvalue);
-
     var setClause = new StringBuilder();
 
-    Tuple tuple = Tuple.tuple();
+    var tuple = Tuple.tuple();
 
-    int index = 1;
+    var index = 1;
 
     for (Map.Entry<String, Object> entry : payload.getMap().entrySet())
     {
-      var column = entry.getKey();
-      var value = entry.getValue();
+      Object value = entry.getValue();
 
-      setClause.append(column).append(" = $").append(index++);
+      setClause.append(entry.getKey()).append(" = $").append(index++);
 
-      if (value instanceof Map)
-      {
-        tuple.addValue(new JsonObject((Map<String, Object>) value).encode());
-      }
-      else
-      {
-        tuple.addValue(value);
-      }
+      tuple.addValue(value instanceof Map ? new JsonObject((Map<String, Object>) value).encode() : value);
 
       if (index <= payload.size())
       {
@@ -162,9 +134,7 @@ public class QueryHandler
       }
     }
 
-    String query = String.format("UPDATE %s SET %s WHERE %s", tableName, setClause, condition);
-
-    return pool.preparedQuery(query)
+    return pool.preparedQuery(String.format("UPDATE %s SET %s WHERE %s", tableName, setClause, String.format("%s = '%s'",fieldName, fieldvalue)))
       .execute(tuple)
       .mapEmpty();
   }
@@ -177,7 +147,7 @@ public class QueryHandler
       return Future.failedFuture("Invalid table name: " + tableName);
     }
 
-    String tableId = switch (tableName)
+    var tableId = switch (tableName)
     {
       case CREDENTIAL_TABLE -> CREDENTIAL_ID_KEY;
       case DISCOVERY_TABLE -> DISCOVERY_ID_KEY;
@@ -185,35 +155,27 @@ public class QueryHandler
       default -> ID_KEY;
     };
 
-    String query = "DELETE FROM " + tableName + " WHERE " + tableId + " = $1";
-
-    Tuple params = Tuple.of(Integer.parseInt(idValue));
-
-    return pool.preparedQuery(query)
-      .execute(params)
+    return pool.preparedQuery("DELETE FROM " + tableName + " WHERE " + tableId + " = $1")
+      .execute(Tuple.of(Integer.parseInt(idValue)))
       .map(rows -> rows.rowCount() > 0);
   }
 
   // Genralized find by ID Using join
   public static Future<JsonObject> getByFieldWithJoinTable(String tableName1, String tableName2, String joiningOnField, String fieldName, String fieldValue)
   {
-    var query = "SELECT t1.*, t2.* " + "FROM " + tableName1 + " t1 " + "JOIN " + tableName2 + " t2 " + "ON t1." + joiningOnField + " = t2." + joiningOnField + " " + "WHERE t1." + fieldName + " = $1";
-
-    return pool.preparedQuery(query)
+    return pool.preparedQuery("SELECT t1.*, t2.* " + "FROM " + tableName1 + " t1 " + "JOIN " + tableName2 + " t2 " + "ON t1." + joiningOnField + " = t2." + joiningOnField + " " + "WHERE t1." + fieldName + " = $1")
       .execute(Tuple.of(fieldValue))
       .map(rows ->
       {
         if (rows.size() == 0) return null;
 
-        Row row = rows.iterator().next();
+        var row = rows.iterator().next();
 
         JsonObject obj = new JsonObject();
 
         for (int i = 0; i < row.size(); i++)
         {
-          String column = row.getColumnName(i);
-          Object val = row.getValue(i);
-          obj.put(column, val);
+          obj.put(row.getColumnName(i), row.getValue(i));
         }
         return obj;
       });
@@ -222,9 +184,7 @@ public class QueryHandler
   // Genralized find all with join two table
   public static Future<List<JsonObject>> getAllWithJoinTable(String tableName1, String tableName2, String joiningOnField)
   {
-    var query = "SELECT t1.*, t2.* " + "FROM " + tableName1 + " t1 " + "JOIN " + tableName2 + " t2 " + "ON t1." + joiningOnField + " = t2." + joiningOnField;
-
-    return pool.preparedQuery(query)
+    return pool.preparedQuery("SELECT t1.*, t2.* " + "FROM " + tableName1 + " t1 " + "JOIN " + tableName2 + " t2 " + "ON t1." + joiningOnField + " = t2." + joiningOnField)
       .execute()
       .map(rows ->
       {
@@ -232,13 +192,11 @@ public class QueryHandler
 
         for (Row row : rows)
         {
-          JsonObject obj = new JsonObject();
+          var obj = new JsonObject();
 
           for (int i = 0; i < row.size(); i++)
           {
-            String column = row.getColumnName(i);
-            Object val = row.getValue(i);
-            obj.put(column, val);
+            obj.put(row.getColumnName(i), row.getValue(i));
           }
           resultList.add(obj);
         }
@@ -249,9 +207,7 @@ public class QueryHandler
   // Genralized find all by field with join two table
   public static Future<List<JsonObject>> getAllByField(String tableName, String fieldName, Object fieldValue)
   {
-    var query = String.format("SELECT * FROM %s WHERE %s = $1", tableName, fieldName);
-
-    return pool.preparedQuery(query)
+    return pool.preparedQuery(String.format("SELECT * FROM %s WHERE %s = $1", tableName, fieldName))
       .execute(Tuple.of(fieldValue))
       .map(rows ->
       {
@@ -261,11 +217,10 @@ public class QueryHandler
 
         for (Row row : rows)
         {
-          JsonObject obj = new JsonObject();
+          var obj = new JsonObject();
 
           for (int i = 0; i < row.size(); i++)
           {
-            String column = row.getColumnName(i);
             Object val = row.getValue(i);
 
             if (val instanceof PGobject pgObject && "jsonb".equalsIgnoreCase(pgObject.getType()))
@@ -276,7 +231,7 @@ public class QueryHandler
             {
               val = offsetDateTime.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
             }
-            obj.put(column, val);
+            obj.put(row.getColumnName(i), val);
           }
           resultList.add(obj);
         }

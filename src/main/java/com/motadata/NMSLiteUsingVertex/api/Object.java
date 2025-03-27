@@ -50,9 +50,7 @@ public class Object
 
     if (payloadValidationResult.get(IS_VALID_KEY).equals("false"))
     {
-      var errorResponse = Utils.createResponse(STATUS_RESPONSE_ERROR, formatInvalidResponse(payloadValidationResult));
-
-      ctx.response().setStatusCode(400).end(errorResponse.encodePrettily());
+      ctx.response().setStatusCode(400).end(Utils.createResponse(STATUS_RESPONSE_ERROR, formatInvalidResponse(payloadValidationResult)).encodePrettily());
       return;
     }
 
@@ -63,9 +61,7 @@ public class Object
           {
             LOGGER.severe("Object is already Provisioned & perform");
 
-            var response = Utils.createResponse(STATUS_RESPONSE_SUCCESS, "Object is already Provisioned & perform polling..");
-
-            ctx.response().setStatusCode(200).end(response.encodePrettily());
+            ctx.response().setStatusCode(200).end(Utils.createResponse(STATUS_RESPONSE_SUCCESS, "Object is already Provisioned & perform polling..").encodePrettily());
             return;
           }
 
@@ -82,18 +78,14 @@ public class Object
             {
               LOGGER.severe("Provisioning failed: " + err.getMessage());
 
-              var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Provisioning failed");
-
-              ctx.response().setStatusCode(400).end(response.encodePrettily());
+              ctx.response().setStatusCode(400).end(Utils.createResponse(STATUS_RESPONSE_FAIIED, "Provisioning failed").encodePrettily());
             });
         })
         .onFailure(err ->
         {
         LOGGER.severe("database query failed: " + err.getMessage());
 
-        var response = Utils.createResponse(STATUS_RESPONSE_ERROR, "database query failed");
-
-        ctx.response().setStatusCode(500).end(response.encodePrettily());
+        ctx.response().setStatusCode(500).end(Utils.createResponse(STATUS_RESPONSE_ERROR, "database query failed").encodePrettily());
       });
   }
 
@@ -106,9 +98,7 @@ public class Object
     {
       LOGGER.warning("Invalid Ip Address : empty IP is received: " + ipAddress);
 
-      var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid Ip Address : IP cannot be empty");
-
-      ctx.response().setStatusCode(400).end(response.encodePrettily());
+      ctx.response().setStatusCode(400).end(Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid Ip Address : IP cannot be empty").encodePrettily());
       return;
     }
 
@@ -116,28 +106,22 @@ public class Object
     {
       LOGGER.warning("Invalid IP address format received: " + ipAddress);
 
-      var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid Ip Address : IP cannot be empty");
-
-      ctx.response().setStatusCode(400).end(response.encodePrettily());
+      ctx.response().setStatusCode(400).end(Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid Ip Address : IP cannot be empty").encodePrettily());
       return;
     }
 
     QueryHandler.getAllByField(POLLING_RESULTS_TABLE, IP_KEY, ipAddress)
       .onSuccess(pollingRecords ->
       {
-        var response = new JsonArray(pollingRecords);
-
         LOGGER.info("Object Polling data fetched successfully");
 
-        ctx.response().setStatusCode(200).end(response.encodePrettily());
+        ctx.response().setStatusCode(200).end(new JsonArray(pollingRecords).encodePrettily());
       })
       .onFailure(err ->
       {
         LOGGER.severe("Failed to fetch provision data: " + err.getMessage());
 
-        var response = Utils.createResponse(STATUS_RESPONSE_ERROR, "Failed to fetch Object Polling data");
-
-        ctx.response().setStatusCode(500).end(response.encodePrettily());
+        ctx.response().setStatusCode(500).end(Utils.createResponse(STATUS_RESPONSE_ERROR, "Failed to fetch Object Polling data").encodePrettily());
       });
 }
 
@@ -151,17 +135,13 @@ public class Object
       {
         LOGGER.info("Fetched objects successfully");
 
-        var response = new JsonArray(objects);
-
-        ctx.response().end(response.encodePrettily());
+        ctx.response().end(new JsonArray(objects).encodePrettily());
       })
       .onFailure(err ->
       {
         LOGGER.severe("Failed to fetch objects: " + err.getMessage());
 
-        var response = Utils.createResponse(STATUS_RESPONSE_ERROR, "Failed to fetch objects: " + err.getMessage());
-
-        ctx.response().setStatusCode(500).end(response.encodePrettily());
+        ctx.response().setStatusCode(500).end(Utils.createResponse(STATUS_RESPONSE_ERROR, "Failed to fetch objects: " + err.getMessage()).encodePrettily());
       });
   }
 
@@ -185,12 +165,11 @@ public class Object
     QueryHandler.getByField(PROVISIONED_OBJECTS_TABLE, OBJECT_ID_KEY, objectId)
       .onSuccess(object ->
       {
-        if (object == null) {
+        if (object == null)
+        {
           LOGGER.warning("Object not found: " + objectId);
 
-          var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "object not found");
-
-          ctx.response().setStatusCode(404).end(response.encodePrettily());
+          ctx.response().setStatusCode(404).end(Utils.createResponse(STATUS_RESPONSE_FAIIED, "object not found").encodePrettily());
         }
         else
         {
@@ -203,9 +182,7 @@ public class Object
       {
         LOGGER.severe("Failed to find object: " + err.getMessage());
 
-        var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "object not found");
-
-        ctx.response().setStatusCode(500).end(response.encodePrettily());
+        ctx.response().setStatusCode(500).end(Utils.createResponse(STATUS_RESPONSE_FAIIED, "object not found").encodePrettily());
       });
   }
 
@@ -229,15 +206,16 @@ public class Object
     QueryHandler.deleteById(PROVISIONED_OBJECTS_TABLE, objectId)
       .onSuccess(deleted ->
       {
-        if (deleted) {
+        if (deleted)
+        {
           LOGGER.info("Object deleted successfully");
 
           Utils.removeObjectFromQueue(Integer.parseInt(objectId));
 
-          var response = new JsonObject().put(STATUS_KEY, STATUS_RESPONSE_SUCCESS).put(STATUS_MSG_KEY, "Object deleted successfully");
-
-          ctx.response().setStatusCode(200).end(response.encodePrettily());
-        } else {
+          ctx.response().setStatusCode(200).end(new JsonObject().put(STATUS_KEY, STATUS_RESPONSE_SUCCESS).put(STATUS_MSG_KEY, "Object deleted successfully").encodePrettily());
+        }
+        else
+        {
           LOGGER.info("No matching record found");
 
           var response = new JsonObject().put("status", "success").put("statusMsg", "No matching record found");

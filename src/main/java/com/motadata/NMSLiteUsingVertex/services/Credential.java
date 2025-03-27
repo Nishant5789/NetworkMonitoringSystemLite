@@ -25,9 +25,7 @@ public class Credential
 
     if (payloadValidationResult.get(IS_VALID_KEY).equals("false"))
     {
-      var errorResponse = Utils.createResponse(STATUS_RESPONSE_ERROR, formatInvalidResponse(payloadValidationResult));
-
-      ctx.response().setStatusCode(400).end(errorResponse.encodePrettily());
+      ctx.response().setStatusCode(400).end(Utils.createResponse(STATUS_RESPONSE_ERROR, formatInvalidResponse(payloadValidationResult)).encodePrettily());
 
       return;
     }
@@ -39,9 +37,7 @@ public class Credential
       {
         LOGGER.info("Credential saved successfully");
 
-        var response = Utils.createResponse(STATUS_RESPONSE_SUCCESS, "Credential saved successfully.");
-
-        ctx.response().setStatusCode(201).end(response.encodePrettily());
+        ctx.response().setStatusCode(201).end(Utils.createResponse(STATUS_RESPONSE_SUCCESS, "Credential saved successfully.").encodePrettily());
       })
       .onFailure(err ->
       {
@@ -49,9 +45,7 @@ public class Credential
 
         var errorMessage = (err.getMessage() != null && err.getMessage().contains("duplicate key value")) ? "Try with a different name, this name is already used by another credential" : "Failed to save credential";
 
-        var response = Utils.createResponse(STATUS_RESPONSE_ERROR, errorMessage);
-
-        ctx.response().setStatusCode(500).end(response.encodePrettily());
+        ctx.response().setStatusCode(500).end(Utils.createResponse(STATUS_RESPONSE_ERROR, errorMessage).encodePrettily());
       });
   }
 
@@ -65,17 +59,13 @@ public class Credential
       {
         LOGGER.info("Fetched credentials successfully");
 
-        var response = new JsonArray(credentials);
-
-        ctx.response().end(response.encodePrettily());
+        ctx.response().end(new JsonArray(credentials).encodePrettily());
       })
       .onFailure(err ->
       {
         LOGGER.severe("Failed to fetch credentials: " + err.getMessage());
 
-        var response = Utils.createResponse(STATUS_RESPONSE_ERROR, "Failed to fetch credentials: " + err.getMessage());
-
-        ctx.response().setStatusCode(500).end(response.encodePrettily());
+        ctx.response().setStatusCode(500).end(Utils.createResponse(STATUS_RESPONSE_ERROR, "Failed to fetch credentials: " + err.getMessage()).encodePrettily());
       });
   }
 
@@ -88,10 +78,7 @@ public class Credential
     {
       LOGGER.warning("Invalid credential id received: " + id);
 
-      var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid credential id: Id cannot be empty");
-
-      ctx.response().setStatusCode(400).end(response.encodePrettily());
-
+      ctx.response().setStatusCode(400).end(Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid credential id: Id cannot be empty").encodePrettily());
       return;
     }
 
@@ -104,9 +91,7 @@ public class Credential
         {
           LOGGER.warning("Credential not found: " + id);
 
-          var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Credential not found");
-
-          ctx.response().setStatusCode(404).end(response.encodePrettily());
+          ctx.response().setStatusCode(404).end(Utils.createResponse(STATUS_RESPONSE_FAIIED, "Credential not found").encodePrettily());
         }
         else
         {
@@ -119,9 +104,7 @@ public class Credential
       {
         LOGGER.severe("Failed to find credential: " + err.getMessage());
 
-        var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Credential not found");
-
-        ctx.response().setStatusCode(500).end(response.encodePrettily());
+        ctx.response().setStatusCode(500).end(Utils.createResponse(STATUS_RESPONSE_FAIIED, "Credential not found").encodePrettily());
       });
   }
 
@@ -134,9 +117,7 @@ public class Credential
     {
       LOGGER.warning("Invalid credential id received: " + credentialId);
 
-      var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid credential id: id cannot be empty");
-
-      ctx.response().setStatusCode(400).end(response.encodePrettily());
+      ctx.response().setStatusCode(400).end(Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid credential id: id cannot be empty").encodePrettily());
 
       return;
     }
@@ -147,9 +128,8 @@ public class Credential
     {
       LOGGER.warning("payload is empty");
 
-      var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid payload: payload is empty");
+      ctx.response().setStatusCode(400).end(Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid payload: payload is empty").encodePrettily());
 
-      ctx.response().setStatusCode(400).end(response.encodePrettily());
       return;
     }
 
@@ -160,19 +140,15 @@ public class Credential
       {
         LOGGER.info("Credential updated successfully for id: " + credentialId);
 
-        var response = Utils.createResponse(STATUS_RESPONSE_SUCCESS, "Credential updated successfully");
-
-        ctx.response().setStatusCode(200).end(response.encodePrettily());
+        ctx.response().setStatusCode(200).end(Utils.createResponse(STATUS_RESPONSE_SUCCESS, "Credential updated successfully").encodePrettily());
       })
       .onFailure(err ->
       {
         LOGGER.severe("Failed to save credential: " + err.getMessage());
 
-        var errorMessage = (err.getMessage() != null && err.getMessage().contains("duplicate key value")) ? "Try with a different name, this name is already used by another credential" : "Failed to save credential";
+        var errorMessage = err.getMessage() != null && err.getMessage().contains("duplicate key value") ? "Try with a different name, this name is already used by another credential" : "Failed to save credential";
 
-        var response = Utils.createResponse(STATUS_RESPONSE_ERROR, errorMessage);
-
-        ctx.response().setStatusCode(500).end(response.encodePrettily());
+        ctx.response().setStatusCode(500).end(Utils.createResponse(STATUS_RESPONSE_ERROR, errorMessage).encodePrettily());
       });
   }
 
@@ -185,21 +161,16 @@ public class Credential
       .onSuccess(deletedStatus ->
       {
         var statusMsg = deletedStatus ? "Credential deleted successfully" : "No matching record found";
-        LOGGER.info(statusMsg);
 
-        var response = new JsonObject().put(STATUS_KEY, STATUS_RESPONSE_SUCCESS).put(STATUS_MSG_KEY, statusMsg);
-
-        ctx.response().setStatusCode(200).end(response.encodePrettily());
+        ctx.response().setStatusCode(200).end(new JsonObject().put(STATUS_KEY, STATUS_RESPONSE_SUCCESS).put(STATUS_MSG_KEY, statusMsg).encodePrettily());
       })
       .onFailure(err ->
       {
         LOGGER.severe("Database query failed: " + err.getMessage());
 
-        String errorMessage = err.getMessage().contains("violates foreign key constraint") ? "Database query failed because the credential is used by a provisioned object" : "Database query failed";
+        var errorMessage = err.getMessage().contains("violates foreign key constraint") ? "Database query failed because the credential is used by a provisioned object" : "Database query failed";
 
-        JsonObject errResponse = Utils.createResponse(STATUS_RESPONSE_ERROR, errorMessage);
-
-        ctx.response().setStatusCode(500).end(errResponse.encodePrettily());
+        ctx.response().setStatusCode(500).end(Utils.createResponse(STATUS_RESPONSE_ERROR, errorMessage).encodePrettily());
       });
   }
 }

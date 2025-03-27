@@ -16,9 +16,11 @@ public class Constants
 
   public static final String PROVISION_EVENT = "provision";
 
+  public static final String POLLING_EVENT = "polling";
+
   public static final String ZMQ_REQUEST_EVENT = "zmq_request";
 
-  public static final String POLLING_EVENT = "polling";
+  public static final String POLLING_RESPONCE_EVENT = "polling_resonce";
 
   public static final String ID_HEADER_PATH = "id";
 
@@ -75,6 +77,10 @@ public class Constants
   public static final String PORT_KEY = "port";
 
   public static final String PORT_VALUE = "22";
+
+  public static final String TRUE_VALUE = "true";
+
+  public static final String FALSE_VALUE = "false";
 
   public static final String IP_KEY = "ip";
 

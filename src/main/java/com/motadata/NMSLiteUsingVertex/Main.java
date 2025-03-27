@@ -38,8 +38,7 @@ public class Main
 
   private static final int EVENT_BUS_RECONNECT_INTERVAL = 10000;
 
-//  private static final Logger LOGGER = Logger.getLogger(Main.class.getName());
-    private static final Logger LOGGER =  AppLogger.getLogger();
+  private static final Logger LOGGER =  AppLogger.getLogger();
 
   private static final Vertx vertx = Vertx.vertx(new VertxOptions()
     .setWorkerPoolSize(VERTX_WORKER_POOL_SIZE)

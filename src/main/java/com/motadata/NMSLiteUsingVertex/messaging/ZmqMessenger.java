@@ -1,6 +1,6 @@
 package com.motadata.NMSLiteUsingVertex.messaging;
 
-import com.motadata.NMSLiteUsingVertex.services.Credential;
+import com.motadata.NMSLiteUsingVertex.Main;
 import com.motadata.NMSLiteUsingVertex.utils.AppLogger;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Promise;
@@ -18,9 +18,9 @@ import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
 
 public class ZmqMessenger extends AbstractVerticle
 {
-  private ZMQ.Context context;
+  private static final ZMQ.Context context = ZMQ.context(1);
 
-  private ZMQ.Socket dealer;
+  private static final ZMQ.Socket dealer = context.socket(SocketType.DEALER);
 
   private static final Logger LOGGER = AppLogger.getLogger();
 
@@ -35,7 +35,7 @@ public class ZmqMessenger extends AbstractVerticle
   private static class RequestHolder
   {
     Message<JsonObject> message;
-
+    JsonObject store;
     long timestamp;
 
     RequestHolder(Message<JsonObject> message, long timestamp)
@@ -43,14 +43,16 @@ public class ZmqMessenger extends AbstractVerticle
       this.message = message;
       this.timestamp = timestamp;
     }
+
+    RequestHolder(JsonObject objectPayload, long timestamp)
+    {
+      this.store = new JsonObject().put(OBJECT_ID_KEY, objectPayload.getInteger(OBJECT_ID_KEY)).put(IP_KEY, objectPayload.getString(IP_KEY));
+      this.timestamp = timestamp;
+    }
   }
 
   public void start(Promise<Void> startPromise)
   {
-    context = ZMQ.context(1);
-
-    dealer = context.socket(SocketType.DEALER);
-
     dealer.setReceiveTimeOut(0);
 
     dealer.setHWM(0);
@@ -79,8 +81,15 @@ public class ZmqMessenger extends AbstractVerticle
 
     messagePayload.put(REQUEST_ID, requestId);
 
-    pendingRequests.put(requestId, new RequestHolder(message, System.currentTimeMillis()));
-
+    if(messagePayload.getString(EVENT_NAME_KEY).equalsIgnoreCase(DISCOVERY_EVENT))
+    {
+      pendingRequests.put(requestId, new RequestHolder(message, System.currentTimeMillis()));
+    }
+    else
+    {
+      pendingRequests.put(requestId, new RequestHolder(messagePayload, System.currentTimeMillis()));
+    }
+    
     LOGGER.info("zmq request send using: " + Thread.currentThread().getName() + " with data : " + message.body());
 
     dealer.send("", ZMQ.SNDMORE);
@@ -108,12 +117,20 @@ public class ZmqMessenger extends AbstractVerticle
 
         if (pendingRequests.containsKey(requestId))
         {
+          LOGGER.info("zmq response received using: " + Thread.currentThread().getName() + " with statusMsg : " + replyJson.getString(STATUS_MSG_KEY));
+
           RequestHolder requestValue = pendingRequests.get(requestId);
 
-          LOGGER.info("zmq response received using: " + Thread.currentThread().getName() + " with statusMsg : "+replyJson.getString(STATUS_MSG_KEY));
+          if(replyJson.getString(STATUS_MSG_KEY).equalsIgnoreCase("Metrics collected successfully"))
+          {
+            var objectDataWithPollResponce = replyJson.put(IP_KEY, requestValue.store.getString(IP_KEY)).put(OBJECT_ID_KEY, requestValue.store.getInteger(OBJECT_ID_KEY));
 
-          requestValue.message.reply(replyJson);
-
+            Main.vertx().eventBus().send(POLLING_RESPONCE_EVENT, objectDataWithPollResponce);
+          }
+          else
+          {
+            requestValue.message.reply(replyJson);
+          }
           pendingRequests.remove(requestId);
         }
         else
@@ -130,15 +147,11 @@ public class ZmqMessenger extends AbstractVerticle
 
   private void checkTimeouts()
   {
-    var now = System.currentTimeMillis();
-
-    var timedOutRequests = pendingRequests.entrySet().stream().filter(entry -> now - entry.getValue().timestamp >= REQUEST_EXPIRE_DURATION).toList();
+    var timedOutRequests = pendingRequests.entrySet().stream().filter(entry -> System.currentTimeMillis() - entry.getValue().timestamp >= REQUEST_EXPIRE_DURATION).toList();
 
     timedOutRequests.forEach(entry ->
     {
-//      logger.warn("Request {} timed out", entry.getKey());
-
-      entry.getValue().message.fail(408, "Request timed out");
+      LOGGER.warning("Request " + entry.getKey() +" timed out");
 
       pendingRequests.remove(entry.getKey());
     });
