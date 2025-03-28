@@ -18,6 +18,10 @@ public class Constants
 
   public static final String POLLING_EVENT = "polling";
 
+  public static final String DISCOVERY_REQUEST = "discovery_request";
+
+  public static final String POLLING_REQUEST = "polling_request";
+
   public static final String ZMQ_REQUEST_EVENT = "zmq_request";
 
   public static final String POLLING_RESPONCE_EVENT = "polling_resonce";
@@ -71,8 +75,6 @@ public class Constants
   public static final String STATUS_PENDING = "pending";
 
   public static final String STATUS_MSG_KEY = "statusMsg";
-
-  public static final String PROVISIONING_STATUS_KEY = "provisioning_status";
 
   public static final String PORT_KEY = "port";
 
