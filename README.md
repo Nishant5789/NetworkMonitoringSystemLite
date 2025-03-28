@@ -51,6 +51,7 @@ CREATE TABLE discovery (
           ip VARCHAR(255) UNIQUE NOT NULL,
           credential_id INT NOT NULL,
           pollinterval INT,
+          availability_status VARCHAR(255) NOT NULL DEFAULT 'UP',
           CONSTRAINT fk_provisioned_credential
               FOREIGN KEY (credential_id) REFERENCES credential(credential_id)
               ON DELETE RESTRICT
@@ -60,14 +61,10 @@ CREATE TABLE discovery (
 ### Polling Table
 ```sql
 CREATE TABLE IF NOT EXISTS polling_results (
-          object_id INT NOT NULL,
+          ip VARCHAR(255) NOT NULL,
           timestamp BIGINT NOT NULL,
           counters JSONB NOT NULL,
-          PRIMARY KEY (object_id, timestamp),
-
-          CONSTRAINT fk_polling_monitor
-              FOREIGN KEY (object_id) REFERENCES provisioned_objects(object_id)
-              ON DELETE CASCADE
+          PRIMARY KEY (ip, timestamp)
       );
 ```
 Here is the updated API documentation with **response examples** included where applicable. Since the original JSON did not provide specific response structures, I have added generic examples based on typical API responses. You can replace these with actual responses from your API when available.
