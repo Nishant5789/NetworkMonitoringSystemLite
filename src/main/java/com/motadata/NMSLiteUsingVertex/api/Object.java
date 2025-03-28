@@ -54,7 +54,7 @@ public class Object
       return;
     }
 
-    QueryHandler.getByField(PROVISIONED_OBJECTS_TABLE, IP_KEY, payload.getString(IP_KEY))
+    QueryHandler.getOneByField(PROVISIONED_OBJECTS_TABLE, IP_KEY, payload.getString(IP_KEY))
         .onSuccess(provisionRecord ->
         {
           if(provisionRecord != null)
@@ -110,7 +110,7 @@ public class Object
       return;
     }
 
-    QueryHandler.getAllByField(POLLING_RESULTS_TABLE, IP_KEY, ipAddress)
+    QueryHandler.getAllByFieldWithJoin(POLLING_RESULTS_TABLE, IP_KEY, ipAddress)
       .onSuccess(pollingRecords ->
       {
         LOGGER.info("Object Polling data fetched successfully");
@@ -130,7 +130,7 @@ public class Object
   {
     LOGGER.info("Fetching all objects with details...");
 
-    QueryHandler.getAllWithJoinTable(PROVISIONED_OBJECTS_TABLE, CREDENTIAL_TABLE, CREDENTIAL_ID_KEY)
+    QueryHandler.getAllWithJoin(PROVISIONED_OBJECTS_TABLE, CREDENTIAL_TABLE, CREDENTIAL_ID_KEY)
       .onSuccess(objects ->
       {
         LOGGER.info("Fetched objects successfully");
@@ -162,7 +162,7 @@ public class Object
 
     LOGGER.info("Finding object by id: " + objectId);
 
-    QueryHandler.getByField(PROVISIONED_OBJECTS_TABLE, OBJECT_ID_KEY, objectId)
+    QueryHandler.getOneByField(PROVISIONED_OBJECTS_TABLE, OBJECT_ID_KEY, objectId)
       .onSuccess(object ->
       {
         if (object == null)

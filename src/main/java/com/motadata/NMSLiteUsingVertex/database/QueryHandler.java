@@ -84,8 +84,14 @@ public class QueryHandler
       });
   }
 
+  // Generalized Find by ID
+  public static Future<JsonObject> getOneById(String tableName, String id)
+  {
+    return getOneByField(tableName, Utils.getIdColumnByTable(tableName), id);
+  }
+
   // Generalized SELECT BY CONDITION
-  public static Future<JsonObject> getByField(String tableName, String fieldName, String fieldvalue)
+  public static Future<JsonObject> getOneByField(String tableName, String fieldName, String fieldvalue)
   {
     return pool.preparedQuery(String.format("SELECT * FROM %s WHERE %s", tableName, String.format("%s = '%s'",fieldName, fieldvalue)))
       .execute()
@@ -105,10 +111,83 @@ public class QueryHandler
       });
   }
 
-  // Generalized Find by ID
-  public static Future<JsonObject> getById(String tableName, String id)
+  // Generalized find by field Using join table
+  public static Future<JsonObject> getOneByFieldWithJoin(String tableName1, String tableName2, String joiningOnField, String fieldName, String fieldValue)
   {
-    return getByField(tableName, Utils.getIdColumnByTable(tableName), id);
+    return pool.preparedQuery("SELECT t1.*, t2.* " + "FROM " + tableName1 + " t1 " + "JOIN " + tableName2 + " t2 " + "ON t1." + joiningOnField + " = t2." + joiningOnField + " " + "WHERE t1." + fieldName + " = $1")
+    .execute(Tuple.of(fieldValue))
+    .map(rows ->
+    {
+      if (rows.size() == 0) return null;
+
+      var row = rows.iterator().next();
+
+      JsonObject obj = new JsonObject();
+
+      for (int i = 0; i < row.size(); i++)
+      {
+        obj.put(row.getColumnName(i), row.getValue(i));
+      }
+      return obj;
+    });
+  }
+
+  // Generalized find all with join  table
+  public static Future<List<JsonObject>> getAllWithJoin(String tableName1, String tableName2, String joiningOnField)
+  {
+    return pool.preparedQuery("SELECT t1.*, t2.* " + "FROM " + tableName1 + " t1 " + "JOIN " + tableName2 + " t2 " + "ON t1." + joiningOnField + " = t2." + joiningOnField)
+    .execute()
+    .map(rows ->
+    {
+      List<JsonObject> resultList = new ArrayList<>();
+
+      for (Row row : rows)
+      {
+        var obj = new JsonObject();
+
+        for (int i = 0; i < row.size(); i++)
+        {
+          obj.put(row.getColumnName(i), row.getValue(i));
+        }
+        resultList.add(obj);
+      }
+      return resultList;
+    });
+  }
+
+  // Generalized find all by field using join table
+  public static Future<List<JsonObject>> getAllByFieldWithJoin(String tableName, String fieldName, Object fieldValue)
+  {
+    return pool.preparedQuery(String.format("SELECT * FROM %s WHERE %s = $1", tableName, fieldName))
+    .execute(Tuple.of(fieldValue))
+    .map(rows ->
+    {
+      List<JsonObject> resultList = new ArrayList<>();
+
+      if (rows.size() == 0) return resultList;
+
+      for (Row row : rows)
+      {
+        var obj = new JsonObject();
+
+        for (int i = 0; i < row.size(); i++)
+        {
+          Object val = row.getValue(i);
+
+          if (val instanceof PGobject pgObject && "jsonb".equalsIgnoreCase(pgObject.getType()))
+          {
+            val = new JsonObject(pgObject.getValue());
+          }
+          else if (val instanceof OffsetDateTime offsetDateTime)
+          {
+            val = offsetDateTime.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+          }
+          obj.put(row.getColumnName(i), val);
+        }
+        resultList.add(obj);
+      }
+      return resultList;
+    });
   }
 
   // Generalized UPDATE : find by field & update
@@ -158,84 +237,5 @@ public class QueryHandler
     return pool.preparedQuery("DELETE FROM " + tableName + " WHERE " + tableId + " = $1")
       .execute(Tuple.of(Integer.parseInt(idValue)))
       .map(rows -> rows.rowCount() > 0);
-  }
-
-  // Genralized find by ID Using join
-  public static Future<JsonObject> getByFieldWithJoinTable(String tableName1, String tableName2, String joiningOnField, String fieldName, String fieldValue)
-  {
-    return pool.preparedQuery("SELECT t1.*, t2.* " + "FROM " + tableName1 + " t1 " + "JOIN " + tableName2 + " t2 " + "ON t1." + joiningOnField + " = t2." + joiningOnField + " " + "WHERE t1." + fieldName + " = $1")
-      .execute(Tuple.of(fieldValue))
-      .map(rows ->
-      {
-        if (rows.size() == 0) return null;
-
-        var row = rows.iterator().next();
-
-        JsonObject obj = new JsonObject();
-
-        for (int i = 0; i < row.size(); i++)
-        {
-          obj.put(row.getColumnName(i), row.getValue(i));
-        }
-        return obj;
-      });
-  }
-
-  // Genralized find all with join two table
-  public static Future<List<JsonObject>> getAllWithJoinTable(String tableName1, String tableName2, String joiningOnField)
-  {
-    return pool.preparedQuery("SELECT t1.*, t2.* " + "FROM " + tableName1 + " t1 " + "JOIN " + tableName2 + " t2 " + "ON t1." + joiningOnField + " = t2." + joiningOnField)
-      .execute()
-      .map(rows ->
-      {
-        List<JsonObject> resultList = new ArrayList<>();
-
-        for (Row row : rows)
-        {
-          var obj = new JsonObject();
-
-          for (int i = 0; i < row.size(); i++)
-          {
-            obj.put(row.getColumnName(i), row.getValue(i));
-          }
-          resultList.add(obj);
-        }
-        return resultList;
-      });
-  }
-
-  // Genralized find all by field with join two table
-  public static Future<List<JsonObject>> getAllByField(String tableName, String fieldName, Object fieldValue)
-  {
-    return pool.preparedQuery(String.format("SELECT * FROM %s WHERE %s = $1", tableName, fieldName))
-      .execute(Tuple.of(fieldValue))
-      .map(rows ->
-      {
-        List<JsonObject> resultList = new ArrayList<>();
-
-        if (rows.size() == 0) return resultList;
-
-        for (Row row : rows)
-        {
-          var obj = new JsonObject();
-
-          for (int i = 0; i < row.size(); i++)
-          {
-            Object val = row.getValue(i);
-
-            if (val instanceof PGobject pgObject && "jsonb".equalsIgnoreCase(pgObject.getType()))
-            {
-              val = new JsonObject(pgObject.getValue());
-            }
-            else if (val instanceof OffsetDateTime offsetDateTime)
-            {
-              val = offsetDateTime.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
-            }
-            obj.put(row.getColumnName(i), val);
-          }
-          resultList.add(obj);
-        }
-        return resultList;
-      });
   }
 }

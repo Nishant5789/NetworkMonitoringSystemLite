@@ -6,7 +6,6 @@ import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Promise;
 import io.vertx.core.eventbus.Message;
 import io.vertx.core.json.JsonObject;
-import org.zeromq.SocketType;
 import org.zeromq.ZMQ;
 
 import java.util.HashMap;
@@ -18,158 +17,159 @@ import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
 
 public class ZmqMessenger extends AbstractVerticle
 {
-  private static final ZMQ.Context context = ZMQ.context(1);
+    private ZMQ.Socket dealer;
 
-  private static final ZMQ.Socket dealer = context.socket(SocketType.DEALER);
+    private static final Logger LOGGER = AppLogger.getLogger();
 
-  private static final Logger LOGGER = AppLogger.getLogger();
+    private static final int RESPONSE_CHECK_INTERVAL = 1000;
 
-  private static final int RESPONSE_CHECK_INTERVAL = 1000;
+    private static final long REQUEST_EXPIRE_DURATION = 86400; // one day
 
-  private static final long REQUEST_EXPIRE_DURATION = 86400; // one day
+    private static final long REQUEST_TIMEOUT_CHECK_INTERVAL = 2000;
 
-  private static final long REQUEST_TIMEOUT_CHECK_INTERVAL = 2000;
+    private final Map<String, RequestHolder> pendingRequests = new HashMap<>();
 
-  private final Map<String, RequestHolder> pendingRequests = new HashMap<>();
-
-  private static class RequestHolder
-  {
-    Message<JsonObject> message;
-    JsonObject store;
-    long timestamp;
-
-    RequestHolder(Message<JsonObject> message, long timestamp)
+    private static class RequestHolder
     {
-      this.message = message;
-      this.timestamp = timestamp;
-    }
+        Message<JsonObject> message;
 
-    RequestHolder(JsonObject objectPayload, long timestamp)
-    {
-      this.store = new JsonObject().put(OBJECT_ID_KEY, objectPayload.getInteger(OBJECT_ID_KEY)).put(IP_KEY, objectPayload.getString(IP_KEY));
-      this.timestamp = timestamp;
-    }
-  }
+        JsonObject store;
 
-  public void start(Promise<Void> startPromise)
-  {
-    dealer.setReceiveTimeOut(0);
+        String type;
 
-    dealer.setHWM(0);
+        long timestamp;
 
-    dealer.connect(ZMQ_ADDRESS);
-
-    vertx.eventBus().<JsonObject>localConsumer(ZMQ_REQUEST_EVENT, this::handleRequest);
-
-    vertx.setPeriodic(RESPONSE_CHECK_INTERVAL, id ->
-    {
-      checkResponses();
-    });
-    vertx.setPeriodic(REQUEST_TIMEOUT_CHECK_INTERVAL, id ->
-    {
-      checkTimeouts();
-    });
-
-    startPromise.complete();
-  }
-
-
-  private void handleRequest(Message<JsonObject> message)
-  {
-    var requestId =  UUID.randomUUID().toString();
-    var messagePayload =  message.body();
-
-    messagePayload.put(REQUEST_ID, requestId);
-
-    if(messagePayload.getString(EVENT_NAME_KEY).equalsIgnoreCase(DISCOVERY_EVENT))
-    {
-      pendingRequests.put(requestId, new RequestHolder(message, System.currentTimeMillis()));
-    }
-    else
-    {
-      pendingRequests.put(requestId, new RequestHolder(messagePayload, System.currentTimeMillis()));
-    }
-    
-    LOGGER.info("zmq request send using: " + Thread.currentThread().getName() + " with data : " + message.body());
-
-    dealer.send("", ZMQ.SNDMORE);
-
-    dealer.send(messagePayload.toString());
-  }
-
-  private void checkResponses()
-  {
-    String response;
-
-    while ((response = dealer.recvStr(ZMQ.DONTWAIT)) != null)
-    {
-      if (response.trim().isEmpty())
-      {
-        continue;
-      }
-      try
-      {
-        var replyJson = new JsonObject(response);
-
-        var requestId = replyJson.getString(REQUEST_ID);
-
-        replyJson.remove(REQUEST_ID);
-
-        if (pendingRequests.containsKey(requestId))
+        RequestHolder(String type, Message<JsonObject> message, long timestamp)
         {
-          LOGGER.info("zmq response received using: " + Thread.currentThread().getName() + " with statusMsg : " + replyJson.getString(STATUS_MSG_KEY));
+            this.type = type;
+            this.message = message;
+            this.timestamp = timestamp;
+        }
 
-          RequestHolder requestValue = pendingRequests.get(requestId);
+        RequestHolder(String type, JsonObject objectPayload, long timestamp)
+        {
+            this.type = type;
+            this.store = new JsonObject().put(OBJECT_ID_KEY, objectPayload.getInteger(OBJECT_ID_KEY)).put(IP_KEY, objectPayload.getString(IP_KEY));
+            this.timestamp = timestamp;
+        }
+    }
 
-          if(replyJson.getString(STATUS_MSG_KEY).equalsIgnoreCase("Metrics collected successfully"))
-          {
-            var objectDataWithPollResponce = replyJson.put(IP_KEY, requestValue.store.getString(IP_KEY)).put(OBJECT_ID_KEY, requestValue.store.getInteger(OBJECT_ID_KEY));
+    public void start(Promise<Void> startPromise)
+    {
+        dealer = ZmqConfig.createDealerSocket();
 
-            Main.vertx().eventBus().send(POLLING_RESPONCE_EVENT, objectDataWithPollResponce);
-          }
-          else
-          {
-            requestValue.message.reply(replyJson);
-          }
-          pendingRequests.remove(requestId);
+        vertx.eventBus().<JsonObject>localConsumer(ZMQ_REQUEST_EVENT, this::handleRequest);
+
+        vertx.setPeriodic(RESPONSE_CHECK_INTERVAL, id ->
+        {
+            checkResponses();
+        });
+        vertx.setPeriodic(REQUEST_TIMEOUT_CHECK_INTERVAL, id ->
+        {
+            checkTimeouts();
+        });
+
+        startPromise.complete();
+    }
+
+
+    private void handleRequest(Message<JsonObject> message)
+    {
+        var requestId = UUID.randomUUID().toString();
+        var messagePayload = message.body();
+
+        messagePayload.put(REQUEST_ID, requestId);
+
+        if (messagePayload.getString(EVENT_NAME_KEY).equalsIgnoreCase(DISCOVERY_EVENT))
+        {
+            pendingRequests.put(requestId, new RequestHolder(DISCOVERY_REQUEST, message, System.currentTimeMillis()));
         }
         else
         {
-          LOGGER.severe("No pending request found for request_id: " + requestId);
+            pendingRequests.put(requestId, new RequestHolder(POLLING_REQUEST, messagePayload, System.currentTimeMillis()));
         }
-      }
-      catch (Exception e)
-      {
-        LOGGER.severe("Failed to parse response as JSON: " + response + " from plugin" + e.getMessage());
-      }
-    }
-  }
 
-  private void checkTimeouts()
-  {
-    var timedOutRequests = pendingRequests.entrySet().stream().filter(entry -> System.currentTimeMillis() - entry.getValue().timestamp >= REQUEST_EXPIRE_DURATION).toList();
+        LOGGER.info("zmq request send using: " + Thread.currentThread().getName() + " with data : " + message.body());
 
-    timedOutRequests.forEach(entry ->
-    {
-      LOGGER.warning("Request " + entry.getKey() +" timed out");
+        dealer.send("", ZMQ.SNDMORE);
 
-      pendingRequests.remove(entry.getKey());
-    });
-  }
-
-  @Override
-  public void stop(Promise<Void> stopPromise)
-  {
-    if (dealer != null)
-    {
-      dealer.close();
+        dealer.send(messagePayload.toString());
     }
 
-    if (context != null)
+    private void checkResponses()
     {
-      context.close();
+        String response;
+        try
+        {
+            while ((response = dealer.recvStr(ZMQ.DONTWAIT))!=null)
+            {
+                if (response.trim().isEmpty())
+                {
+                    continue;
+                }
+                try
+                {
+                    var replyJson = new JsonObject(response);
+                    var requestId = replyJson.getString(REQUEST_ID);
+                    replyJson.remove(REQUEST_ID);
+
+                    if (pendingRequests.containsKey(requestId))
+                    {
+                        RequestHolder requestValue = pendingRequests.get(requestId);
+
+                        LOGGER.info("ZMQ response received using: " + Thread.currentThread().getName() + " with type: " + requestValue.type);
+
+                        if (requestValue.type.equalsIgnoreCase(POLLING_REQUEST))
+                        {
+                            var objectDataWithPollResponse = replyJson.put(IP_KEY, requestValue.store.getString(IP_KEY))
+                            .put(OBJECT_ID_KEY, requestValue.store.getInteger(OBJECT_ID_KEY));
+
+                            Main.vertx().eventBus().send(POLLING_RESPONCE_EVENT, objectDataWithPollResponse);
+                        }
+                        else
+                        {
+                            requestValue.message.reply(replyJson);
+                        }
+                        pendingRequests.remove(requestId);
+                    }
+                    else
+                    {
+                        LOGGER.severe("No pending request found for request_id: " + requestId);
+                    }
+                }
+                catch (Exception e)
+                {
+                    LOGGER.severe("Failed to parse response as JSON: " + response + " from plugin. Error: " + e.getMessage());
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            LOGGER.severe("Error while receiving response from ZMQ: " + e.getMessage());
+        }
     }
 
-    stopPromise.complete();
-  }
+
+    private void checkTimeouts()
+    {
+        var timedOutRequests = pendingRequests.entrySet().stream().filter(entry -> System.currentTimeMillis() - entry.getValue().timestamp >= REQUEST_EXPIRE_DURATION).toList();
+
+        timedOutRequests.forEach(entry ->
+        {
+            LOGGER.warning("Request " + entry.getKey() + " timed out");
+
+            pendingRequests.remove(entry.getKey());
+        });
+    }
+
+    @Override
+    public void stop(Promise<Void> stopPromise)
+    {
+        if (dealer!=null)
+        {
+            dealer.close();
+        }
+
+        stopPromise.complete();
+    }
 }

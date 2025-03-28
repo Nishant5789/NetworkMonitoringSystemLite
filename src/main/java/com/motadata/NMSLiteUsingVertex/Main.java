@@ -22,7 +22,7 @@ public class Main
 
   private static final int SERVER_VERTICLE_INSTANCES = 1;
 
-  private static final int ZMQMESSENGER_VERTICLE_INSTANCES = 1;
+  private static final int ZMQ_MESSENGER_VERTICLE_INSTANCES = 4;
 
   private static final int POLLER_VERTICLE_INSTANCES = 1;
 
@@ -115,7 +115,7 @@ public class Main
   {
     return deployVerticle(Server.class.getName(), new DeploymentOptions().setInstances(SERVER_VERTICLE_INSTANCES))
 
-      .compose(v -> deployVerticle(ZmqMessenger.class.getName(), new DeploymentOptions().setInstances(ZMQMESSENGER_VERTICLE_INSTANCES)))
+      .compose(v -> deployVerticle(ZmqMessenger.class.getName(), new DeploymentOptions().setInstances(ZMQ_MESSENGER_VERTICLE_INSTANCES)))
 
       .compose(v -> deployVerticle(Discovery.class.getName(), new DeploymentOptions().setInstances(DISCOVERY_VERTICLE_INSTANCES)))
 
