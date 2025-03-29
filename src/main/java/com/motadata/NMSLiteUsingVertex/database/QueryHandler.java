@@ -17,7 +17,6 @@ import java.util.Map;
 
 import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
 
-
 public class QueryHandler
 {
   // Instance-level pool

@@ -22,7 +22,7 @@ public class Main
 
   private static final int SERVER_VERTICLE_INSTANCES = 1;
 
-  private static final int ZMQ_MESSENGER_VERTICLE_INSTANCES = 4;
+  private static final int ZMQ_MESSENGER_VERTICLE_INSTANCES = 1;
 
   private static final int POLLER_VERTICLE_INSTANCES = 1;
 
