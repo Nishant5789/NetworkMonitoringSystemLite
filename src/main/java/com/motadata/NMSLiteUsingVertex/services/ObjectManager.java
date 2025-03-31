@@ -63,7 +63,6 @@ public class ObjectManager extends AbstractVerticle
             .onSuccess(promise::complete)
             .onFailure(promise::fail);
         }).map(v -> objectPayload);
-
       })
       .compose(objectPayload ->
       {

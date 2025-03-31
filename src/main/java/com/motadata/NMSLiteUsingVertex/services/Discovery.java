@@ -33,10 +33,20 @@ public class Discovery extends AbstractVerticle
         var ip = payload.getString(IP_KEY);
         var port = payload.getInteger(PORT_KEY);
 
-        Utils.checkDeviceAvailability(ip, port)
-        .compose(availability ->
+        Utils.ping(ip).compose(PingReachability ->
         {
-            if (!availability)
+            if (PingReachability)
+            {
+                return Utils.checkPort(ip, port);
+            }
+            else
+            {
+                return Future.failedFuture("ping is unsuccessful for iP: " + ip);
+            }
+        })
+        .compose(portAvailability ->
+        {
+            if (!portAvailability)
             {
                 return Future.failedFuture("ssh service is not running or disable on provided port");
             }
@@ -47,6 +57,7 @@ public class Discovery extends AbstractVerticle
                    .onSuccess(promise::complete)
                    .onFailure(promise::fail);
             });
+
         })
         .compose(credential ->
         {

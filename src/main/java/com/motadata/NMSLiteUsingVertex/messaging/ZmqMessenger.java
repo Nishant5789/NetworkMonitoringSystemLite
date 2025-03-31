@@ -19,11 +19,11 @@ public class ZmqMessenger extends AbstractVerticle
 {
   private static final Logger LOGGER = AppLogger.getLogger();
 
-  private static final int RESPONSE_CHECK_INTERVAL = 500; // prod: 500 ms
+  private static final int RESPONSE_CHECK_INTERVAL = 1000; // prod: 500 ms
 
   private static final long REQUEST_EXPIRE_DURATION = 300000; // prod: 300000 ms (5-min)
 
-  private static final long REQUEST_TIMEOUT_CHECK_INTERVAL = 2000; // prod: 2000 ms(2-sec)
+  private static final long REQUEST_TIMEOUT_CHECK_INTERVAL = 2000; // prod: 2000 ms(4-sec)
 
   private ZMQ.Socket push;
   private ZMQ.Socket pull;
@@ -70,7 +70,6 @@ public class ZmqMessenger extends AbstractVerticle
 
     startPromise.complete();
   }
-
 
   private void handleRequest(Message<JsonObject> message)
   {
@@ -146,7 +145,6 @@ public class ZmqMessenger extends AbstractVerticle
     }
   }
 
-
   private void checkTimeouts()
   {
     var timedOutRequests = pendingRequests.entrySet().stream().filter(entry -> System.currentTimeMillis() - entry.getValue().timestamp >= REQUEST_EXPIRE_DURATION).toList();
@@ -162,8 +160,6 @@ public class ZmqMessenger extends AbstractVerticle
   @Override
   public void stop(Promise<Void> stopPromise)
   {
-    ZmqConfig.closeSocketSilently(push);
-    ZmqConfig.closeSocketSilently(pull);
     stopPromise.complete();
   }
 }

@@ -226,9 +226,9 @@ public class Object
         }
         else
         {
-          var response = new JsonObject().put("status", "success").put("statusMsg", "No matching record found");
+          var response = new JsonObject().put(STATUS_KEY, STATUS_RESPONSE_SUCCESS).put(STATUS_MSG_KEY, "No matching record found");
 
-          ctx.response().setStatusCode(200).end(response.encodePrettily());
+          ctx.response().setStatusCode(400).end(response.encodePrettily());
         }
       })
       .onFailure(err ->

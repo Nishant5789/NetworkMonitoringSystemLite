@@ -24,7 +24,7 @@ public class Credential
 
         var payloadValidationResult = Utils.isValidPayload(CREDENTIAL_TABLE, payload);
 
-        if (payloadValidationResult.get(IS_VALID_KEY).equals("false"))
+        if (payloadValidationResult.get(IS_VALID_KEY).equals(FALSE_VALUE))
         {
             ctx.response().setStatusCode(400).end(Utils.createResponse(STATUS_RESPONSE_ERROR, formatInvalidResponse(payloadValidationResult)).encodePrettily());
             return;
@@ -44,17 +44,15 @@ public class Credential
         {
             LOGGER.severe("Failed to save credential: " + err.getMessage());
 
-            var errorMessage = (err.getMessage()!=null && err.getMessage().contains("duplicate key value")) ? "Try with a different name, this name is already used by another credential":"Failed to save credential";
+            var errorMessage = (err.getMessage() != null && err.getMessage().contains("duplicate key value")) ? "Try with a different name, this name is already used by another credential":"Failed to save credential";
 
             ctx.response().setStatusCode(500).end(Utils.createResponse(STATUS_RESPONSE_ERROR, errorMessage).encodePrettily());
         });
     }
 
-    // handle send all credentials
+    // handle get all credentials
     public static void getAllCredentials(RoutingContext ctx)
     {
-        LOGGER.info("Fetching all credentials");
-
         ctx.vertx().<List<JsonObject>>executeBlocking(promise ->
         {
              QueryHandler.getAll(CREDENTIAL_TABLE)
@@ -90,15 +88,15 @@ public class Credential
                .onSuccess(promise::complete)
                .onFailure(promise::fail);
         })
-        .onSuccess(credential ->
+        .onSuccess(credentialRecord ->
         {
-            if (credential==null)
+            if (credentialRecord==null)
             {
                 ctx.response().setStatusCode(404).end(Utils.createResponse(STATUS_RESPONSE_FAIIED, "Credential not found").encodePrettily());
             }
             else
             {
-                ctx.response().end(credential.encodePrettily());
+                ctx.response().end(credentialRecord.encodePrettily());
             }
         })
         .onFailure(err ->
@@ -157,9 +155,14 @@ public class Credential
         })
         .onSuccess(deletedStatus ->
         {
-          var statusMsg = deletedStatus ? "Credential deleted successfully":"No matching record found";
-
-          ctx.response().setStatusCode(200).end(new JsonObject().put(STATUS_KEY, STATUS_RESPONSE_SUCCESS).put(STATUS_MSG_KEY, statusMsg).encodePrettily());
+            if (deletedStatus)
+            {
+                ctx.response().setStatusCode(200).end(new JsonObject().put(STATUS_KEY, STATUS_RESPONSE_SUCCESS).put(STATUS_MSG_KEY, "Credential deleted successfully").encodePrettily());
+            }
+            else
+            {
+                ctx.response().setStatusCode(400).end(new JsonObject().put(STATUS_KEY, STATUS_RESPONSE_SUCCESS).put(STATUS_MSG_KEY, "No matching record found").encodePrettily());
+            }
         })
         .onFailure(err ->
         {

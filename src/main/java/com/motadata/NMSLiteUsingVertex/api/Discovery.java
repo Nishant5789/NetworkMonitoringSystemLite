@@ -195,7 +195,7 @@ public class Discovery
       {
         if (err.getMessage().contains("discovery not found for provided Id"))
         {
-          ctx.response().setStatusCode(500).end(Utils.createResponse(STATUS_RESPONSE_FAIIED, err.getMessage()).encodePrettily());
+          ctx.response().setStatusCode(400).end(Utils.createResponse(STATUS_RESPONSE_FAIIED, err.getMessage()).encodePrettily());
         }
         else
         {
@@ -274,7 +274,7 @@ public class Discovery
         }
         else
         {
-          ctx.response().setStatusCode(200).end(new JsonObject().put(STATUS_KEY, STATUS_RESPONSE_SUCCESS).put("statusMsg", "No matching record found").encodePrettily());
+          ctx.response().setStatusCode(400).end(new JsonObject().put(STATUS_KEY, STATUS_RESPONSE_SUCCESS).put(STATUS_MSG_KEY, "No matching record found").encodePrettily());
         }
       })
       .onFailure(err ->
