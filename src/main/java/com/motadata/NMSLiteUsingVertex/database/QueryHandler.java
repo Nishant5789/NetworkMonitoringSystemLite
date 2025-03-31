@@ -17,7 +17,6 @@ import java.util.Map;
 
 import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
 
-
 public class QueryHandler
 {
   // Instance-level pool
@@ -90,7 +89,7 @@ public class QueryHandler
     return getOneByField(tableName, Utils.getIdColumnByTable(tableName), id);
   }
 
-  // Generalized SELECT BY CONDITION
+  // Generalized find by condition
   public static Future<JsonObject> getOneByField(String tableName, String fieldName, String fieldvalue)
   {
     return pool.preparedQuery(String.format("SELECT * FROM %s WHERE %s", tableName, String.format("%s = '%s'",fieldName, fieldvalue)))

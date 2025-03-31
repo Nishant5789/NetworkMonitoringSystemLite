@@ -9,6 +9,7 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 
+import java.util.List;
 import java.util.logging.Logger;
 
 import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
@@ -54,35 +55,40 @@ public class Object
       return;
     }
 
-    QueryHandler.getOneByField(PROVISIONED_OBJECTS_TABLE, IP_KEY, payload.getString(IP_KEY))
-        .onSuccess(provisionRecord ->
+    ctx.vertx().<JsonObject>executeBlocking(promise ->
+      {
+        QueryHandler.getOneByField(PROVISIONED_OBJECTS_TABLE, IP_KEY, payload.getString(IP_KEY))
+          .onSuccess(promise::complete)
+          .onFailure(promise::fail);
+      })
+      .onSuccess(provisionRecord ->
+      {
+        if (provisionRecord != null)
         {
-          if(provisionRecord != null)
+          LOGGER.severe("Object is already Provisioned & perform");
+
+          ctx.response().setStatusCode(200).end(Utils.createResponse(STATUS_RESPONSE_SUCCESS, "Object is already Provisioned & perform polling..").encodePrettily());
+          return;
+        }
+
+        Main.vertx().eventBus().<JsonObject>request(PROVISION_EVENT, payload)
+          .onSuccess(replybody ->
           {
-            LOGGER.severe("Object is already Provisioned & perform");
+            var response = replybody.body();
 
-            ctx.response().setStatusCode(200).end(Utils.createResponse(STATUS_RESPONSE_SUCCESS, "Object is already Provisioned & perform polling..").encodePrettily());
-            return;
-          }
+            LOGGER.info("Provisioning successful: " + response);
 
-          Main.vertx().eventBus().<JsonObject>request(PROVISION_EVENT, payload)
-            .onSuccess(replybody ->
-            {
-              var response = replybody.body();
+            ctx.response().setStatusCode(201).end(response.encodePrettily());
+          })
+          .onFailure(err ->
+          {
+            LOGGER.severe("Provisioning failed: " + err.getMessage());
 
-              LOGGER.info("Provisioning successful: " + response);
-
-              ctx.response().setStatusCode(201).end(response.encodePrettily());
-            })
-            .onFailure(err ->
-            {
-              LOGGER.severe("Provisioning failed: " + err.getMessage());
-
-              ctx.response().setStatusCode(400).end(Utils.createResponse(STATUS_RESPONSE_FAIIED, "Provisioning failed").encodePrettily());
-            });
-        })
-        .onFailure(err ->
-        {
+            ctx.response().setStatusCode(400).end(Utils.createResponse(STATUS_RESPONSE_FAIIED, "Provisioning failed").encodePrettily());
+          });
+      })
+      .onFailure(err ->
+      {
         LOGGER.severe("database query failed: " + err.getMessage());
 
         ctx.response().setStatusCode(500).end(Utils.createResponse(STATUS_RESPONSE_ERROR, "database query failed").encodePrettily());
@@ -94,7 +100,7 @@ public class Object
   {
     var ipAddress = ctx.pathParam(IP_HEADER_PATH);
 
-    if (ipAddress == null|| ipAddress.trim().isEmpty())
+    if (ipAddress == null || ipAddress.trim().isEmpty())
     {
       LOGGER.warning("Invalid Ip Address : empty IP is received: " + ipAddress);
 
@@ -110,11 +116,14 @@ public class Object
       return;
     }
 
-    QueryHandler.getAllByFieldWithJoin(POLLING_RESULTS_TABLE, IP_KEY, ipAddress)
+    ctx.vertx().<List<JsonObject>>executeBlocking(promise ->
+      {
+        QueryHandler.getAllByFieldWithJoin(POLLING_RESULTS_TABLE, IP_KEY, ipAddress)
+          .onSuccess(promise::complete)
+          .onFailure(promise::fail);
+      })
       .onSuccess(pollingRecords ->
       {
-        LOGGER.info("Object Polling data fetched successfully");
-
         ctx.response().setStatusCode(200).end(new JsonArray(pollingRecords).encodePrettily());
       })
       .onFailure(err ->
@@ -123,18 +132,19 @@ public class Object
 
         ctx.response().setStatusCode(500).end(Utils.createResponse(STATUS_RESPONSE_ERROR, "Failed to fetch Object Polling data").encodePrettily());
       });
-}
+  }
 
   // handle send all objects data
   private static void getAllObjects(RoutingContext ctx)
   {
-    LOGGER.info("Fetching all objects with details...");
-
-    QueryHandler.getAllWithJoin(PROVISIONED_OBJECTS_TABLE, CREDENTIAL_TABLE, CREDENTIAL_ID_KEY)
+    ctx.vertx().<List<JsonObject>>executeBlocking(promise ->
+      {
+        QueryHandler.getAllWithJoin(PROVISIONED_OBJECTS_TABLE, CREDENTIAL_TABLE, CREDENTIAL_ID_KEY)
+          .onSuccess(promise::complete)
+          .onFailure(promise::fail);
+      })
       .onSuccess(objects ->
       {
-        LOGGER.info("Fetched objects successfully");
-
         ctx.response().end(new JsonArray(objects).encodePrettily());
       })
       .onFailure(err ->
@@ -150,19 +160,20 @@ public class Object
   {
     var objectId = ctx.pathParam(OBJECT_ID_HEADER_PATH);
 
-    if (objectId == null || objectId.trim().isEmpty()) {
-      LOGGER.warning("Invalid object id received: " + objectId);
-
+    if (objectId == null || objectId.trim().isEmpty())
+    {
       var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid object id: Id cannot be empty");
 
       ctx.response().setStatusCode(400).end(response.encodePrettily());
-
       return;
     }
 
-    LOGGER.info("Finding object by id: " + objectId);
-
-    QueryHandler.getOneByField(PROVISIONED_OBJECTS_TABLE, OBJECT_ID_KEY, objectId)
+    ctx.vertx().<JsonObject>executeBlocking(promise ->
+      {
+        QueryHandler.getOneByField(PROVISIONED_OBJECTS_TABLE, OBJECT_ID_KEY, objectId)
+          .onSuccess(promise::complete)
+          .onFailure(promise::fail);
+      })
       .onSuccess(object ->
       {
         if (object == null)
@@ -193,34 +204,31 @@ public class Object
 
     if (objectId == null || objectId.trim().isEmpty())
     {
-      LOGGER.warning("Invalid object id received: " + objectId);
-
       var response = Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid object id: Id cannot be empty");
 
       ctx.response().setStatusCode(400).end(response.encodePrettily());
       return;
     }
 
-    LOGGER.info("Finding object status by id: " + objectId);
-
-    QueryHandler.deleteById(PROVISIONED_OBJECTS_TABLE, objectId)
+    ctx.vertx().<Boolean>executeBlocking(promise ->
+      {
+        QueryHandler.deleteById(PROVISIONED_OBJECTS_TABLE, objectId)
+          .onSuccess(promise::complete)
+          .onFailure(promise::fail);
+      })
       .onSuccess(deleted ->
       {
         if (deleted)
         {
-          LOGGER.info("Object deleted successfully");
-
           Utils.removeObjectFromQueue(Integer.parseInt(objectId));
 
           ctx.response().setStatusCode(200).end(new JsonObject().put(STATUS_KEY, STATUS_RESPONSE_SUCCESS).put(STATUS_MSG_KEY, "Object deleted successfully").encodePrettily());
         }
         else
         {
-          LOGGER.info("No matching record found");
+          var response = new JsonObject().put(STATUS_KEY, STATUS_RESPONSE_SUCCESS).put(STATUS_MSG_KEY, "No matching record found");
 
-          var response = new JsonObject().put("status", "success").put("statusMsg", "No matching record found");
-
-          ctx.response().setStatusCode(200).end(response.encodePrettily());
+          ctx.response().setStatusCode(400).end(response.encodePrettily());
         }
       })
       .onFailure(err ->

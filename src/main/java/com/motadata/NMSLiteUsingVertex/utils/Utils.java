@@ -14,7 +14,6 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.*;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
@@ -26,7 +25,73 @@ public class Utils
 {
     private static final Logger LOGGER = AppLogger.getLogger();
 
-    private static final List<JsonObject> objectList = new ArrayList<>();
+    private static final List<JsonObject> objectCacheList = new CopyOnWriteArrayList<>();
+
+    private static Process goPluginProcess;
+
+    // Start GoPlugin using ProcessBuilder
+    public static Future<String> startGOPlugin()
+    {
+        return Main.vertx().<String>executeBlocking(pluginInitPromise ->
+        {
+            try
+            {
+                var builder = new ProcessBuilder("bash", "-c", "cd /home/nishant/codeworkspace/GoLandWorkSpace/PluginEngine &&  /usr/local/go/bin/go run main.go");
+                builder.redirectErrorStream(true);
+
+                goPluginProcess = builder.start(); // Store the process reference
+                try
+                {
+                    BufferedReader reader = new BufferedReader(new InputStreamReader(goPluginProcess.getInputStream()));
+
+                    String line = reader.readLine();
+                    if (line.contains("Starting ZMQ Server..."))
+                    {
+                        LOGGER.info("Go plugin started successfully...");
+                        pluginInitPromise.complete("ZMQ Server Started Successfully");
+                    }
+                }
+                catch (IOException e)
+                {
+                    pluginInitPromise.fail("Error reading Go plugin output: " + e.getMessage());
+                }
+
+                // Timeout handling
+                Main.vertx().setTimer(5000, id ->
+                {
+                    if (!pluginInitPromise.future().isComplete())
+                    {
+                        LOGGER.warning("Timeout: Failed to detect ZMQ Server startup within 5 seconds");
+                        stopGOPlugin(); // Call stop function
+                        pluginInitPromise.fail("Timeout: Failed to detect ZMQ Server startup");
+                    }
+                });
+            }
+            catch (IOException e)
+            {
+                pluginInitPromise.fail("Failed to start Go Plugin: " + e.getMessage());
+            }
+        });
+    }
+
+    // ✅ New method to stop the Go Plugin process
+    public static Future<String> stopGOPlugin()
+    {
+        Promise<String> promise = Promise.promise();
+
+        if (goPluginProcess!=null && goPluginProcess.isAlive())
+        {
+            goPluginProcess.destroy(); // Try to terminate the process
+            LOGGER.info("Go Plugin process terminated.");
+            promise.complete("Go Plugin Stopped Successfully");
+        }
+        else
+        {
+            LOGGER.warning("Go Plugin process is not running.");
+            promise.fail("Go Plugin process is not running.");
+        }
+        return promise.future();
+    }
 
     // check ping is successful or not
     public static Future<Boolean> ping(String ip)
@@ -70,122 +135,42 @@ public class Utils
     // check port is reachable
     public static Future<Boolean> checkPort(String ip, Integer port)
     {
-        Promise<Boolean> promise = Promise.promise();
-
-        Main.vertx().createNetClient().connect(port, ip, res ->
+        return Main.vertx().executeBlocking(promise ->
         {
-            if (res.succeeded())
+            Main.vertx().createNetClient().connect(port, ip, res ->
             {
-                LOGGER.info("Successful TCP connection for IP: " + ip + " Port: " + port);
-
-                promise.complete(true);
-            }
-            else
-            {
-                LOGGER.severe("tcp connection is unSuccessful for IP: " + ip + " Port: " + port + " - " + res.cause().getMessage());
-
-                promise.complete(false);
-            }
-        });
-
-        return promise.future();
-    }
-
-    // check device reachability
-    public static Future<Boolean> checkDeviceAvailability(String ip, Integer port)
-    {
-        try
-        {
-            return ping(ip).compose(isPingReachable ->
-            {
-                if (isPingReachable)
+                if (res.succeeded())
                 {
-                    LOGGER.info("Ping command is  successfully executed for ip: " + ip);
+                    LOGGER.info("Successful TCP connection for IP: " + ip + " Port: " + port);
 
-                    return checkPort(ip, port);
+                    promise.complete(true);
                 }
                 else
                 {
-                    return Future.failedFuture("ping is unsuccessful for iP: " + ip);
+                    LOGGER.severe("tcp connection is unSuccessful for IP: " + ip + " Port: " + port + " - " + res.cause().getMessage());
+
+                    promise.complete(false);
                 }
             });
-        }
-        catch (Exception exception)
-        {
-            LOGGER.severe("Failed to check device availability: " + exception.getMessage());
-
-            return Future.failedFuture("Failed to check device availability");
-        }
+        });
     }
 
-    // Start GoPlugin using ProcessBuilder
-    public static Future<String> startGOPlugin()
-    {
-        Promise<String> pluginInitPromise = Promise.promise();
-
-        try
-        {
-            ProcessBuilder builder = new ProcessBuilder("bash", "-c", "cd /home/nishant/codeworkspace/GoLandWorkSpace/PluginEngine && /usr/local/go/bin/go run main.go");
-            builder.redirectErrorStream(true);
-            Process process = builder.start();
-
-            // Start a separate thread to read the process output
-            new Thread(() ->
-            {
-                try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream())))
-                {
-                    String line;
-                    while ((line = reader.readLine())!=null)
-                    {
-                        if (line.contains("Starting ZMQ Server..."))
-                        {
-                            LOGGER.info("Go plugin started successfully...");
-                            pluginInitPromise.complete("ZMQ Server Started Successfully");
-//                            return;
-                        }
-                    }
-                }
-                catch (IOException e)
-                {
-                    pluginInitPromise.fail("Error reading Go plugin output: " + e.getMessage());
-                }
-            }).start();
-
-            // Add a timeout mechanism
-            Main.vertx().setTimer(5000, id ->
-            {
-                if (!pluginInitPromise.future().isComplete())
-                {
-                    pluginInitPromise.fail("Timeout: Failed to detect ZMQ Server startup within 5 seconds");
-                    process.destroy(); // Kill the process if it's still running
-                }
-            });
-
-        }
-        catch (IOException e)
-        {
-            pluginInitPromise.fail("Failed to start Go Plugin: " + e.getMessage());
-        }
-
-        return pluginInitPromise.future();
-    }
-
-    // add objectWithData in objectList
+    // add objectWithData in objectCacheList
     public static void addObjectInList(JsonObject obj)
     {
-        objectList.add(obj);
+        objectCacheList.add(obj);
     }
 
-    // return objectList
+    // return objectCacheList
     public static List<JsonObject> getObjectList()
     {
-        return objectList;
+        return objectCacheList;
     }
 
     // remove Object from ObjectQueue
     public static void removeObjectFromQueue(int objectId)
     {
-        objectList.removeIf(obj -> obj.getInteger(OBJECT_ID_KEY)==objectId);
+        objectCacheList.removeIf(obj -> obj.getInteger(OBJECT_ID_KEY)==objectId);
     }
 
     // update ObjectQueue from database
@@ -194,50 +179,46 @@ public class Utils
         return QueryHandler.getAllWithJoin(PROVISIONED_OBJECTS_TABLE, CREDENTIAL_TABLE, CREDENTIAL_ID_KEY)
         .onSuccess(objectResult ->
         {
-            LOGGER.info("Received object  from DB: " + (objectResult!=null ? objectResult.size():0));
-
             for (JsonObject objectData : objectResult)
             {
-                objectList.add(createObjectToAddQueue(objectData));
+                objectCacheList.add(createObjectToAddQueue(objectData));
             }
-
-            LOGGER.severe("Object list updated successfully: " + objectList);
-        })
-        .mapEmpty()
+            LOGGER.severe("Object cache list updated successfully: " + objectCacheList);
+        }).mapEmpty()
         .onFailure(err ->
         {
-            LOGGER.severe("Failed to update object list: " + err.getMessage());
+            LOGGER.severe("Failed to update object cache list: " + err.getMessage());
         });
     }
 
-    // handle update lastPollTime in objectList
+    // handle update lastPollTime in objectCacheList
     public static void updateObjectLastPollTimeInObjectQueue(int objectId, Long lastPollTIME)
     {
-            objectList.stream().filter(obj -> obj.getInteger(OBJECT_ID_KEY)==objectId).findFirst().ifPresent(obj -> obj.put(LAST_POLL_TIME_KEY, lastPollTIME));
+        objectCacheList.stream().filter(obj -> obj.getInteger(OBJECT_ID_KEY)==objectId).findFirst().ifPresent(obj -> obj.put(LAST_POLL_TIME_KEY, lastPollTIME));
     }
 
     // check whether is  object down?  based on threshold value
     public static boolean checkFailureThresholdExceeded(int objectId)
     {
-        return objectList.stream().filter(obj -> obj.getInteger(OBJECT_ID_KEY)==objectId).anyMatch(obj -> obj.getInteger(FAILURE_COUNT_KEY) >= THRESHOLD_FAILURE_VALUE);
+        return objectCacheList.stream().filter(obj -> obj.getInteger(OBJECT_ID_KEY)==objectId).anyMatch(obj -> obj.getInteger(FAILURE_COUNT_KEY) >= THRESHOLD_FAILURE_VALUE);
     }
 
     // check Status is up or not?
     public static boolean isObjectStatusDown(int objectId)
     {
-        return objectList.stream().filter(obj -> obj.getInteger(OBJECT_ID_KEY)==objectId).map(obj -> obj.getString(OBJECT_AVAILABILITY_KEY)).anyMatch(status -> OBJECT_AVAILABILITY_DOWN.equalsIgnoreCase(status));
+        return objectCacheList.stream().filter(obj -> obj.getInteger(OBJECT_ID_KEY)==objectId).map(obj -> obj.getString(OBJECT_AVAILABILITY_KEY)).anyMatch(status -> OBJECT_AVAILABILITY_DOWN.equalsIgnoreCase(status));
     }
 
     // check Status is down or not?
     public static boolean isObjectStatusUP(int objectId)
     {
-        return objectList.stream().filter(obj -> obj.getInteger(OBJECT_ID_KEY)==objectId).map(obj -> obj.getString(OBJECT_AVAILABILITY_KEY)).anyMatch(status -> OBJECT_AVAILABILITY_UP.equalsIgnoreCase(status));
+        return objectCacheList.stream().filter(obj -> obj.getInteger(OBJECT_ID_KEY)==objectId).map(obj -> obj.getString(OBJECT_AVAILABILITY_KEY)).anyMatch(status -> OBJECT_AVAILABILITY_UP.equalsIgnoreCase(status));
     }
 
     // update failure count based on objectId
     public static void incrementFailureCount(int objectId)
     {
-        objectList.stream().filter(obj -> obj.getInteger(OBJECT_ID_KEY)==objectId).findFirst().ifPresent(obj ->
+        objectCacheList.stream().filter(obj -> obj.getInteger(OBJECT_ID_KEY)==objectId).findFirst().ifPresent(obj ->
         {
             obj.put(FAILURE_COUNT_KEY, obj.getInteger(FAILURE_COUNT_KEY) + 1);
         });
@@ -246,18 +227,23 @@ public class Utils
     // reset failureThreeSold value zero
     public static void resetFailureCount(int objectId)
     {
-        objectList.stream().filter(obj -> obj.getInteger(OBJECT_ID_KEY)==objectId).findFirst().ifPresent(obj -> obj.put(FAILURE_COUNT_KEY, 0));
+        objectCacheList.stream().filter(obj -> obj.getInteger(OBJECT_ID_KEY)==objectId).findFirst().ifPresent(obj -> obj.put(FAILURE_COUNT_KEY, 0));
     }
 
-    // update status in objectList & database
+    // update status in objectCacheList & database
     public static void updateStatusInObjectQueueAndDatabase(int objectId, String status)
     {
-        // Update status in objectList
-        objectList.stream().filter(obj -> obj.getInteger(OBJECT_ID_KEY)==objectId).findFirst().ifPresent(obj -> obj.put(OBJECT_AVAILABILITY_KEY, status));
+        // Update status in objectCacheList
+        objectCacheList.stream().filter(obj -> obj.getInteger(OBJECT_ID_KEY)==objectId).findFirst().ifPresent(obj -> obj.put(OBJECT_AVAILABILITY_KEY, status));
 
         // Update status in database
-        QueryHandler.updateByField(PROVISIONED_OBJECTS_TABLE, new JsonObject().put(OBJECT_AVAILABILITY_KEY, status), OBJECT_ID_KEY, objectId)
-        .onSuccess(updated ->
+        Main.vertx().<Void>executeBlocking(promise ->
+        {
+            QueryHandler.updateByField(PROVISIONED_OBJECTS_TABLE, new JsonObject().put(OBJECT_AVAILABILITY_KEY, status), OBJECT_ID_KEY, objectId)
+            .onSuccess(promise::complete)
+            .onFailure(promise::fail);
+        })
+        .onSuccess(result ->
         {
             LOGGER.info("objectID: " + objectId + " status updated to " + status + " at timestamp: " + System.currentTimeMillis());
         })
@@ -367,6 +353,12 @@ public class Utils
             response.put(IS_VALID_KEY, FALSE_VALUE);
         }
 
+        if (!isValidSystemType(payload.getString(SYSTEM_TYPE_KEY)))
+        {
+            response.put(IS_VALID_KEY, FALSE_VALUE);
+            response.put(SYSTEM_TYPE_ERROR, "system type is not valid");
+        }
+
         if (!payload.containsKey(CREDENTIAL_DATA_KEY) || !(payload.getValue(CREDENTIAL_DATA_KEY) instanceof JsonObject))
         {
             return invalidate(response, "Invalid or missing 'credential_data'");
@@ -435,6 +427,17 @@ public class Utils
     public static boolean isValidIPAddress(String ip)
     {
         return Pattern.compile("^((25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)$").matcher(ip).matches();
+    }
+
+    // validate system type
+    private static boolean isValidSystemType(String systemType)
+    {
+        if (systemType==null)
+        {
+            return false;
+        }
+        systemType = systemType.toLowerCase();
+        return systemType.equals("linux") || systemType.equals("windows") || systemType.equals("snmp");
     }
 
     // Helper method to check if a string field is valid

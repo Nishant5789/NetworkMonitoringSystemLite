@@ -7,6 +7,7 @@ import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.RoutingContext;
 
+import java.util.List;
 import java.util.logging.Logger;
 
 import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
@@ -23,42 +24,43 @@ public class Credential
 
         var payloadValidationResult = Utils.isValidPayload(CREDENTIAL_TABLE, payload);
 
-        if (payloadValidationResult.get(IS_VALID_KEY).equals("false"))
+        if (payloadValidationResult.get(IS_VALID_KEY).equals(FALSE_VALUE))
         {
             ctx.response().setStatusCode(400).end(Utils.createResponse(STATUS_RESPONSE_ERROR, formatInvalidResponse(payloadValidationResult)).encodePrettily());
-
             return;
         }
 
-        LOGGER.info("Saving credential: " + payload);
-
-        QueryHandler.save(CREDENTIAL_TABLE, payload)
+        ctx.vertx().executeBlocking(promise ->
+        {
+            QueryHandler.save(CREDENTIAL_TABLE, payload)
+            .onSuccess(promise::complete)
+            .onFailure(promise::fail);
+        })
         .onSuccess(v ->
         {
-            LOGGER.info("Credential saved successfully");
-
             ctx.response().setStatusCode(201).end(Utils.createResponse(STATUS_RESPONSE_SUCCESS, "Credential saved successfully.").encodePrettily());
         })
         .onFailure(err ->
         {
             LOGGER.severe("Failed to save credential: " + err.getMessage());
 
-            var errorMessage = (err.getMessage()!=null && err.getMessage().contains("duplicate key value")) ? "Try with a different name, this name is already used by another credential":"Failed to save credential";
+            var errorMessage = (err.getMessage() != null && err.getMessage().contains("duplicate key value")) ? "Try with a different name, this name is already used by another credential":"Failed to save credential";
 
             ctx.response().setStatusCode(500).end(Utils.createResponse(STATUS_RESPONSE_ERROR, errorMessage).encodePrettily());
         });
     }
 
-    // handle send all credentials
+    // handle get all credentials
     public static void getAllCredentials(RoutingContext ctx)
     {
-        LOGGER.info("Fetching all credentials");
-
-        QueryHandler.getAll(CREDENTIAL_TABLE)
+        ctx.vertx().<List<JsonObject>>executeBlocking(promise ->
+        {
+             QueryHandler.getAll(CREDENTIAL_TABLE)
+               .onSuccess(promise::complete)
+               .onFailure(promise::fail);
+        })
         .onSuccess(credentials ->
         {
-            LOGGER.info("Fetched credentials successfully");
-
             ctx.response().putHeader("Content-Type", "application/json").end(new JsonArray(credentials).encodePrettily());
         })
         .onFailure(err ->
@@ -76,34 +78,29 @@ public class Credential
 
         if (id==null || id.trim().isEmpty())
         {
-            LOGGER.warning("Invalid credential id received: " + id);
-
             ctx.response().setStatusCode(400).end(Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid credential id: Id cannot be empty").encodePrettily());
             return;
         }
 
-        LOGGER.info("Finding credential by id: " + id);
-
-        QueryHandler.getOneByField(CREDENTIAL_TABLE, "credential_id", id)
-        .onSuccess(credential ->
+        ctx.vertx().<JsonObject>executeBlocking(promise ->
         {
-            if (credential==null)
+             QueryHandler.getOneByField(CREDENTIAL_TABLE, CREDENTIAL_ID_KEY, id)
+               .onSuccess(promise::complete)
+               .onFailure(promise::fail);
+        })
+        .onSuccess(credentialRecord ->
+        {
+            if (credentialRecord==null)
             {
-                LOGGER.warning("Credential not found: " + id);
-
                 ctx.response().setStatusCode(404).end(Utils.createResponse(STATUS_RESPONSE_FAIIED, "Credential not found").encodePrettily());
             }
             else
             {
-                LOGGER.info("Found credential: " + credential);
-
-                ctx.response().end(credential.encodePrettily());
+                ctx.response().end(credentialRecord.encodePrettily());
             }
         })
         .onFailure(err ->
         {
-            LOGGER.severe("Failed to find credential: " + err.getMessage());
-
             ctx.response().setStatusCode(500).end(Utils.createResponse(STATUS_RESPONSE_FAIIED, "Credential not found").encodePrettily());
         });
     }
@@ -115,10 +112,7 @@ public class Credential
 
         if (credentialId==null || credentialId.trim().isEmpty())
         {
-            LOGGER.warning("Invalid credential id received: " + credentialId);
-
             ctx.response().setStatusCode(400).end(Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid credential id: id cannot be empty").encodePrettily());
-
             return;
         }
 
@@ -126,25 +120,22 @@ public class Credential
 
         if (payload==null || payload.isEmpty())
         {
-            LOGGER.warning("payload is empty");
-
             ctx.response().setStatusCode(400).end(Utils.createResponse(STATUS_RESPONSE_FAIIED, "Invalid payload: payload is empty").encodePrettily());
             return;
         }
 
-        LOGGER.info("Updating credential for id: " + credentialId);
-
-        QueryHandler.updateByField(CREDENTIAL_TABLE, payload, CREDENTIAL_ID_KEY, credentialId)
+        ctx.vertx().<Void>executeBlocking(promise ->
+        {
+             QueryHandler.updateByField(CREDENTIAL_TABLE, payload, CREDENTIAL_ID_KEY, credentialId)
+               .onSuccess(promise::complete)
+               .onFailure(promise::fail);
+        })
         .onSuccess(v ->
         {
-            LOGGER.info("Credential updated successfully for id: " + credentialId);
-
             ctx.response().setStatusCode(200).end(Utils.createResponse(STATUS_RESPONSE_SUCCESS, "Credential updated successfully").encodePrettily());
         })
         .onFailure(err ->
         {
-            LOGGER.severe("Failed to save credential: " + err.getMessage());
-
             var errorMessage = err.getMessage()!=null && err.getMessage().contains("duplicate key value") ? "Try with a different name, this name is already used by another credential":"Failed to save credential";
 
             ctx.response().setStatusCode(500).end(Utils.createResponse(STATUS_RESPONSE_ERROR, errorMessage).encodePrettily());
@@ -156,12 +147,22 @@ public class Credential
     {
         var credentialId = ctx.pathParam(ID_KEY);
 
-        QueryHandler.deleteById(CREDENTIAL_TABLE, credentialId)
+        ctx.vertx().<Boolean>executeBlocking(promise ->
+        {
+             QueryHandler.deleteById(CREDENTIAL_TABLE, credentialId)
+               .onSuccess(promise::complete)
+               .onFailure(promise::fail);
+        })
         .onSuccess(deletedStatus ->
         {
-            var statusMsg = deletedStatus ? "Credential deleted successfully":"No matching record found";
-
-            ctx.response().setStatusCode(200).end(new JsonObject().put(STATUS_KEY, STATUS_RESPONSE_SUCCESS).put(STATUS_MSG_KEY, statusMsg).encodePrettily());
+            if (deletedStatus)
+            {
+                ctx.response().setStatusCode(200).end(new JsonObject().put(STATUS_KEY, STATUS_RESPONSE_SUCCESS).put(STATUS_MSG_KEY, "Credential deleted successfully").encodePrettily());
+            }
+            else
+            {
+                ctx.response().setStatusCode(400).end(new JsonObject().put(STATUS_KEY, STATUS_RESPONSE_SUCCESS).put(STATUS_MSG_KEY, "No matching record found").encodePrettily());
+            }
         })
         .onFailure(err ->
         {

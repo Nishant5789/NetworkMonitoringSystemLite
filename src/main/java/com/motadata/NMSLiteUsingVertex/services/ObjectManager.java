@@ -11,115 +11,119 @@ import io.vertx.core.eventbus.Message;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 
-
-import java.util.List;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.logging.Logger;
-import java.util.stream.Collectors;
 
 import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
 
 public class ObjectManager extends AbstractVerticle
 {
-    private static final Logger LOGGER = AppLogger.getLogger();
+  private static final Logger LOGGER = AppLogger.getLogger();
 
-    @Override
-    public void start(Promise<Void> startPromise) throws Exception
-    {
-        LOGGER.info("Object services deployed: " + Thread.currentThread().getName());
+  @Override
+  public void start(Promise<Void> startPromise) throws Exception
+  {
+    LOGGER.info("Object services deployed: " + Thread.currentThread().getName());
 
-        vertx.eventBus().<JsonObject>localConsumer(PROVISION_EVENT, this::provision);
+    vertx.eventBus().<JsonObject>localConsumer(PROVISION_EVENT, this::provision);
 
-        // start object scheduling
-        handleObjectScheduling();
-        startPromise.complete();
-    }
+    // start object scheduling
+    handleObjectScheduling();
+    startPromise.complete();
+  }
 
-    // handle provisioning
-    private void provision(Message<JsonObject> message)
-    {
-        var payload = message.body();
-        var ip = payload.getString(IP_KEY);
-        var pollInterval = payload.getInteger(POLL_INTERVAL_KEY);
+  // handle provisioning
+  private void provision(Message<JsonObject> message)
+  {
+    var payload = message.body();
+    var ip = payload.getString(IP_KEY);
+    var pollInterval = payload.getInteger(POLL_INTERVAL_KEY);
 
+    Main.vertx().<JsonObject>executeBlocking(promise ->
+      {
         QueryHandler.getOneByFieldWithJoin(DISCOVERY_TABLE, CREDENTIAL_TABLE, CREDENTIAL_ID_KEY, IP_KEY, ip)
-        .compose(discoveryRecord ->
+          .onSuccess(promise::complete)
+          .onFailure(promise::fail);
+      })
+      .compose(discoveryRecord ->
+      {
+        if (discoveryRecord == null)
         {
-            if (discoveryRecord==null)
-            {
-                LOGGER.info("Discovery details not found for IP: " + ip);
-
-                return Future.failedFuture("No discovery record found for your provided IP");
-            }
-            else if (discoveryRecord.getString(DISCOVERY_STATUS_KEY).equals(STATUS_PENDING))
-            {
-                LOGGER.info("Discovery is incomplete for this IP: " + ip);
-
-                return Future.failedFuture("Discovery is incomplete for your provided IP");
-            }
-
-            var objectPayload = createObject(discoveryRecord, pollInterval);
-
-            return QueryHandler.save(PROVISIONED_OBJECTS_TABLE, createProvisionObjectPayload(discoveryRecord, pollInterval)).map(v -> objectPayload);
-        })
-        .compose(objectPayload ->
+          return Future.failedFuture("No discovery record found for your provided IP");
+        }
+        else if (discoveryRecord.getString(DISCOVERY_STATUS_KEY).equals(STATUS_PENDING))
         {
-            LOGGER.info("Provisioned object successfully created for IP: " + ip);
+          return Future.failedFuture("Discovery is incomplete for your provided IP");
+        }
 
-            return QueryHandler.getOneByField(PROVISIONED_OBJECTS_TABLE, IP_KEY, ip).map(provisionedObjectRecord -> objectPayload.put(OBJECT_ID_KEY, provisionedObjectRecord.getInteger(OBJECT_ID_KEY)));
-        })
-        .onSuccess(objectPayload ->
+        var objectPayload = createObject(discoveryRecord, pollInterval);
+
+        return Main.vertx().<Void>executeBlocking(promise ->
         {
-            Utils.addObjectInList(objectPayload);
-
-            LOGGER.info("Object with IP: " + ip + " and Object ID: " + objectPayload.getInteger(OBJECT_ID_KEY) + " added to objectList");
-
-            message.reply(Utils.createResponse(STATUS_KEY, STATUS_RESPONSE_SUCCESS));
-        })
-        .onFailure(err ->
+          QueryHandler.save(PROVISIONED_OBJECTS_TABLE, createProvisionObjectPayload(discoveryRecord, pollInterval))
+            .onSuccess(promise::complete)
+            .onFailure(promise::fail);
+        }).map(v -> objectPayload);
+      })
+      .compose(objectPayload ->
+      {
+        return Main.vertx().<JsonObject>executeBlocking(promise ->
         {
-            LOGGER.warning("Database query failed: " + err);
+          QueryHandler.getOneByField(PROVISIONED_OBJECTS_TABLE, IP_KEY, ip)
+            .onSuccess(promise::complete)
+            .onFailure(promise::fail);
+        }).map(provisionedObjectRecord -> objectPayload.put(OBJECT_ID_KEY, provisionedObjectRecord.getInteger(OBJECT_ID_KEY)));
+      })
+      .onSuccess(objectPayload ->
+      {
+        Utils.addObjectInList(objectPayload);
 
-            message.reply(Utils.createResponse(STATUS_RESPONSE_FAIIED, err.getMessage()));
-        });
-    }
+        LOGGER.info("Object with IP: " + ip + " and Object ID: " + objectPayload.getInteger(OBJECT_ID_KEY) + " added to objectCacheList");
 
-    // schedule object polling
-    private void handleObjectScheduling()
+        message.reply(Utils.createResponse(STATUS_KEY, STATUS_RESPONSE_SUCCESS));
+      })
+      .onFailure(err ->
+      {
+        LOGGER.warning("Database query failed: " + err);
+
+        message.reply(Utils.createResponse(STATUS_RESPONSE_FAIIED, err.getMessage()));
+      });
+  }
+
+  // schedule object polling
+  private void handleObjectScheduling()
+  {
+    Main.vertx().setPeriodic(2000, timeId ->
     {
-        Main.vertx().setPeriodic(3000, timeId ->
+      LOGGER.info("Polling is started, objectCacheList: " + Utils.getObjectList());
+
+      var objectToPoll = new JsonArray();
+
+      for (JsonObject object : Utils.getObjectList())
+      {
+        var timeSinceLastPoll = System.currentTimeMillis() - object.getLong(LAST_POLL_TIME_KEY);
+
+        if (timeSinceLastPoll >= object.getInteger(POLL_INTERVAL_KEY))
         {
-            LOGGER.info("Polling is started, objectList: " + Utils.getObjectList());
+          objectToPoll.add(object);
 
-            var objectToPoll = new JsonArray();
+          Main.vertx().eventBus().send(POLLING_EVENT, objectToPoll);
+        }
+      }
+      LOGGER.info("Object sent for polling: " + objectToPoll.encodePrettily());
+    });
+  }
 
-            for (JsonObject object : Utils.getObjectList())
-            {
-                var timeSinceLastPoll = System.currentTimeMillis() - object.getLong(LAST_POLL_TIME_KEY);
+  // create object with data to store on objectQueue
+  private JsonObject createObject(JsonObject discoveryRecord, Integer pollInterval)
+  {
+    JsonObject credentialDataPayload = new JsonObject(discoveryRecord.getString(CREDENTIAL_DATA_KEY));
 
-                if (timeSinceLastPoll >= object.getInteger(POLL_INTERVAL_KEY))
-                {
-                    objectToPoll.add(object);
+    return new JsonObject().put(USERNAME_KEY, credentialDataPayload.getString(USERNAME_KEY)).put(PASSWORD_KEY, credentialDataPayload.getString(PASSWORD_KEY)).put(IP_KEY, discoveryRecord.getString(IP_KEY)).put(PORT_KEY, discoveryRecord.getString(PORT_KEY)).put(PLUGIN_ENGINE_TYPE_KEY, PLUGIN_ENGINE_LINUX).put(LAST_POLL_TIME_KEY, System.currentTimeMillis()).put(POLL_INTERVAL_KEY, pollInterval).put(FAILURE_COUNT_KEY, DEAFAULT_FAILURE_VALUE).put(OBJECT_AVAILABILITY_KEY, OBJECT_AVAILABILITY_UP);
+  }
 
-                    Main.vertx().eventBus().send(POLLING_EVENT, objectToPoll);
-                }
-            }
-            LOGGER.info("Object sent for polling: " + objectToPoll.encodePrettily());
-        });
-    }
-
-    //create object with data to store on objectQueue
-    private JsonObject createObject(JsonObject discoveryRecord, Integer pollInterval)
-    {
-        JsonObject credentialDataPayload = new JsonObject(discoveryRecord.getString(CREDENTIAL_DATA_KEY));
-
-        return new JsonObject().put(USERNAME_KEY, credentialDataPayload.getString(USERNAME_KEY)).put(PASSWORD_KEY, credentialDataPayload.getString(PASSWORD_KEY)).put(IP_KEY, discoveryRecord.getString(IP_KEY)).put(PORT_KEY, discoveryRecord.getString(PORT_KEY)).put(PLUGIN_ENGINE_TYPE_KEY, PLUGIN_ENGINE_LINUX).put(LAST_POLL_TIME_KEY, System.currentTimeMillis()).put(POLL_INTERVAL_KEY, pollInterval).put(FAILURE_COUNT_KEY, DEAFAULT_FAILURE_VALUE).put(OBJECT_AVAILABILITY_KEY, OBJECT_AVAILABILITY_UP);
-    }
-
-    //create provision_object  store on provisioned_objectstable on database
-    private JsonObject createProvisionObjectPayload(JsonObject discoveryRecord, Integer pollInterval)
-    {
-        return new JsonObject().put(IP_KEY, discoveryRecord.getString(IP_KEY)).put(CREDENTIAL_ID_KEY, Integer.parseInt(discoveryRecord.getString(CREDENTIAL_ID_KEY))).put(POLL_INTERVAL_KEY, pollInterval);
-    }
+  // create provision_object for store on database
+  private JsonObject createProvisionObjectPayload(JsonObject discoveryRecord, Integer pollInterval)
+  {
+    return new JsonObject().put(IP_KEY, discoveryRecord.getString(IP_KEY)).put(CREDENTIAL_ID_KEY, Integer.parseInt(discoveryRecord.getString(CREDENTIAL_ID_KEY))).put(POLL_INTERVAL_KEY, pollInterval);
+  }
 }
