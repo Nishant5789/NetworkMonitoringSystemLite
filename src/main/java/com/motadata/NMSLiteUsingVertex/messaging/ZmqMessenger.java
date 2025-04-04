@@ -19,17 +19,18 @@ public class ZmqMessenger extends AbstractVerticle
 {
   private static final Logger LOGGER = AppLogger.getLogger();
 
-  private static final int RESPONSE_CHECK_INTERVAL = 1000; // prod: 500 ms
+  private static final int RESPONSE_CHECK_INTERVAL = 1000; // production: 500 ms
 
-  private static final long REQUEST_EXPIRE_DURATION = 300000; // prod: 300000 ms (5-min)
+  private static final long REQUEST_EXPIRE_DURATION = 300000; // production: 300000 ms (5-min)
 
-  private static final long REQUEST_TIMEOUT_CHECK_INTERVAL = 2000; // prod: 2000 ms(4-sec)
+  private static final long REQUEST_TIMEOUT_CHECK_INTERVAL = 2000; // production: 2000 ms(4-sec)
 
   private ZMQ.Socket push;
   private ZMQ.Socket pull;
 
   private final Map<String, RequestHolder> pendingRequests = new HashMap<>();
 
+  // class which hold request event and request Id
   private static class RequestHolder
   {
     Message<JsonObject> message;
@@ -71,6 +72,7 @@ public class ZmqMessenger extends AbstractVerticle
     startPromise.complete();
   }
 
+  // handle request which for polling and check discovery task
   private void handleRequest(Message<JsonObject> message)
   {
     var requestId = UUID.randomUUID().toString();
@@ -89,9 +91,10 @@ public class ZmqMessenger extends AbstractVerticle
 
     LOGGER.info("zmq request send using: " + Thread.currentThread().getName() + " with data : " + message.body());
 
-    push.send(messagePayload.toString());
+    push.send(messagePayload.toString(),ZMQ.DONTWAIT);
   }
 
+  // handle response come from go Plugin engine
   private void checkResponses()
   {
     String response;
@@ -111,16 +114,15 @@ public class ZmqMessenger extends AbstractVerticle
 
           if (pendingRequests.containsKey(requestId))
           {
-            RequestHolder requestValue = pendingRequests.get(requestId);
+            var requestValue = pendingRequests.get(requestId);
 
             LOGGER.info("ZMQ response received using: " + Thread.currentThread().getName() + " with type: " + requestValue.type);
 
             if (requestValue.type.equalsIgnoreCase(POLLING_REQUEST))
             {
-              var objectDataWithPollResponse = replyJson.put(IP_KEY, requestValue.store.getString(IP_KEY))
-                .put(OBJECT_ID_KEY, requestValue.store.getInteger(OBJECT_ID_KEY));
+              replyJson.put(IP_KEY, requestValue.store.getString(IP_KEY)).put(OBJECT_ID_KEY, requestValue.store.getInteger(OBJECT_ID_KEY));
 
-              Main.vertx().eventBus().send(POLLING_RESPONCE_EVENT, objectDataWithPollResponse);
+              Main.vertx().eventBus().send(POLLING_RESPONCE_EVENT, replyJson);
             }
             else
             {
@@ -145,6 +147,7 @@ public class ZmqMessenger extends AbstractVerticle
     }
   }
 
+  // remove pending request from hashmap which timeout is expired
   private void checkTimeouts()
   {
     var timedOutRequests = pendingRequests.entrySet().stream().filter(entry -> System.currentTimeMillis() - entry.getValue().timestamp >= REQUEST_EXPIRE_DURATION).toList();

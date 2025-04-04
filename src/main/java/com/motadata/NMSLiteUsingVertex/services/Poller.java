@@ -88,7 +88,7 @@ public class Poller extends AbstractVerticle
     // update lastPollTime in Object queue
     Utils.updateObjectLastPollTimeInObjectQueue(objectId, currTimestamp);
 
-    // dumb polling data in database
+    // dump polling data in database
     Main.vertx().<Void>executeBlocking(promise ->
       {
         QueryHandler.save(POLLING_RESULTS_TABLE, pollResponsePayload)

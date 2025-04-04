@@ -30,17 +30,17 @@ public class DatabaseClient
         .setUser(DATABASE_USERNAME)
         .setPassword(DATABASE_PASSWORD);
 
-        PoolOptions poolOptions = new PoolOptions().setMaxSize(MAX_POOL_SIZE);
+        var poolOptions = new PoolOptions().setMaxSize(MAX_POOL_SIZE);
         pool = Pool.pool(vertx, connectOptions, poolOptions);
 
         // Check if database exists
-        String checkDbQuery = "SELECT 1 FROM pg_database WHERE datname = 'nms_lite_22'";
+        var checkDbQuery = "SELECT 1 FROM pg_database WHERE datname = 'nms_lite_20'";
 
         pool.query(checkDbQuery).execute(checkDbQueryResult ->
         {
             if (checkDbQueryResult.succeeded() && checkDbQueryResult.result().size() > 0)
             {
-                LOGGER.info("Database nms_lite_22 already exists.");
+                LOGGER.info("Database nms_lite_20 already exists.");
 
                 switchToNewDatabase(vertx)
                 .onSuccess(result -> promise.complete())
@@ -48,19 +48,19 @@ public class DatabaseClient
             }
             else
             {
-                LOGGER.info("Database nms_lite_22 does not exist, creating...");
+                LOGGER.info("Database nms_lite_20 does not exist, creating...");
 
-                pool.query("CREATE DATABASE nms_lite_22").execute(createQueryResult ->
+                pool.query("CREATE DATABASE nms_lite_20").execute(createQueryResult ->
                 {
                     if (createQueryResult.succeeded())
                     {
-                        LOGGER.info("Database nms_lite_22 created successfully.");
+                        LOGGER.info("Database nms_lite_20 created successfully.");
                         switchToNewDatabase(vertx).onComplete(promise);
                     }
                     else
                     {
-                        LOGGER.warning("Failed to create database nms_lite_22: " + createQueryResult.cause().getMessage());
-                        promise.fail("Failed to create database nms_lite_22"); // ✅ Fail if DB creation fails
+                        LOGGER.warning("Failed to create database nms_lite_20: " + createQueryResult.cause().getMessage());
+                        promise.fail("Failed to create database nms_lite_20"); // ✅ Fail if DB creation fails
                     }
                 });
             }
@@ -78,13 +78,13 @@ public class DatabaseClient
         }
 
         PgConnectOptions newConnectOptions = new PgConnectOptions()
-        .setPort(DATABASE_PORT)
-        .setHost(DATABASE_HOST)
-        .setDatabase(DATABASE_NAME)
-        .setUser(DATABASE_USERNAME)
-        .setPassword(DATABASE_PASSWORD);
+            .setPort(DATABASE_PORT)
+            .setHost(DATABASE_HOST)
+            .setDatabase(DATABASE_NAME)
+            .setUser(DATABASE_USERNAME)
+            .setPassword(DATABASE_PASSWORD);
 
-        PoolOptions newPoolOptions = new PoolOptions().setMaxSize(MAX_POOL_SIZE);
+        var newPoolOptions = new PoolOptions().setMaxSize(MAX_POOL_SIZE);
         pool = Pool.pool(vertx, newConnectOptions, newPoolOptions);
 
         return createTables(); // ✅ Ensure table creation happens before resolving
@@ -95,7 +95,7 @@ public class DatabaseClient
     {
         Promise<Void> promise = Promise.promise();
 
-        String createTablesQuery = """
+        var createTablesQuery = """
         -- Credential Table
         CREATE TABLE IF NOT EXISTS credential (
             credential_id SERIAL PRIMARY KEY,

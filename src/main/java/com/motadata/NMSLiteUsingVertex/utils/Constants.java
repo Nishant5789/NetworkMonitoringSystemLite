@@ -2,10 +2,6 @@ package com.motadata.NMSLiteUsingVertex.utils;
 
 public class Constants
 {
-  public static final String ZMQ_PULL_SOCKET_ADDRESS = "tcp://127.0.0.1:5555";
-
-  public static final String ZMQ_PUSH_SOCKET_ADDRESS = "tcp://*:5556";
-
   public static final String CREDENTIAL_TABLE = "credential";
 
   public static final String DISCOVERY_TABLE = "discovery";
@@ -134,7 +130,7 @@ public class Constants
 
   public static final Integer THRESHOLD_FAILURE_VALUE = 5;
 
-  public static final String DATABASE_NAME = "nms_lite_22";
+  public static final String DATABASE_NAME = "nms_lite_20";
 
   public static final String OBJECT_AVAILABILITY_KEY = "availability_status";
 

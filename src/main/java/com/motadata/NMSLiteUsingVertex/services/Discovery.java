@@ -51,12 +51,7 @@ public class Discovery extends AbstractVerticle
                 return Future.failedFuture("ssh service is not running or disable on provided port");
             }
 
-            return Main.vertx().<JsonObject>executeBlocking(promise ->
-            {
-                 QueryHandler.getOneById(CREDENTIAL_TABLE, payload.getString(CREDENTIAL_ID_KEY))
-                   .onSuccess(promise::complete)
-                   .onFailure(promise::fail);
-            });
+            return Utils.executeBlockingOperation(() -> QueryHandler.getOneById(CREDENTIAL_TABLE, payload.getString(CREDENTIAL_ID_KEY)));
 
         })
         .compose(credential ->
@@ -76,12 +71,7 @@ public class Discovery extends AbstractVerticle
         {
             if (jsonResponse.body().getString(STATUS_KEY).equals(STATUS_RESPONSE_SUCCESS))
             {
-                return Main.vertx().<Void>executeBlocking(promise ->
-                {
-                     QueryHandler.updateByField(DISCOVERY_TABLE, new JsonObject().put(DISCOVERY_STATUS_KEY, "complete"), DISCOVERY_ID_KEY, payload.getInteger(CREDENTIAL_ID_KEY))
-                       .onSuccess(promise::complete)
-                       .onFailure(promise::fail);
-                });
+                return Utils.executeBlockingOperation(() -> QueryHandler.updateByField(DISCOVERY_TABLE, new JsonObject().put(DISCOVERY_STATUS_KEY, "complete"), DISCOVERY_ID_KEY, payload.getInteger(CREDENTIAL_ID_KEY)));
             }
             else
             {
