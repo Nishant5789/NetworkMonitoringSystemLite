@@ -1,5 +1,10 @@
 package com.motadata.NMSLiteUsingVertex.utils;
 
+import com.itextpdf.kernel.pdf.PdfDocument;
+import com.itextpdf.kernel.pdf.PdfWriter;
+import com.itextpdf.layout.Document;
+import com.itextpdf.layout.element.Paragraph;
+import com.itextpdf.layout.element.Table;
 import com.motadata.NMSLiteUsingVertex.Main;
 import com.motadata.NMSLiteUsingVertex.database.QueryHandler;
 import com.motadata.NMSLiteUsingVertex.services.Credential;
@@ -10,11 +15,10 @@ import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.json.impl.JsonUtil;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Supplier;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -27,70 +31,67 @@ public class Utils
 
     private static final List<JsonObject> objectCacheList = new CopyOnWriteArrayList<>();
 
-    private static Process goPluginProcess;
+    // Start GoPlugin using ProcessBuilder
 
     // Start GoPlugin using ProcessBuilder
     public static Future<String> startGOPlugin()
     {
-        return Main.vertx().<String>executeBlocking(pluginInitPromise ->
+        Promise<String> pluginInitPromise = Promise.promise();
+        try
         {
-            try
+            ProcessBuilder builder = new ProcessBuilder("bash", "-c", "cd /home/nishant/codeworkspace/GoLandWorkSpace/PluginEngine && /usr/local/go/bin/go run main.go");
+            builder.redirectErrorStream(true);
+            Process process = builder.start();
+
+            // Start a separate thread to read the process output
+            new Thread(() ->
             {
-                var builder = new ProcessBuilder("bash", "-c", "cd /home/nishant/codeworkspace/GoLandWorkSpace/PluginEngine &&  /usr/local/go/bin/go run main.go");
-                builder.redirectErrorStream(true);
-
-                goPluginProcess = builder.start(); // Store the process reference
-                try
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream())))
                 {
-                    BufferedReader reader = new BufferedReader(new InputStreamReader(goPluginProcess.getInputStream()));
-
-                    String line = reader.readLine();
-                    if (line.contains("Starting ZMQ Server..."))
+                    String line;
+                    while ((line = reader.readLine()) != null)
                     {
-                        LOGGER.info("Go plugin started successfully...");
-                        pluginInitPromise.complete("ZMQ Server Started Successfully");
+                        if (line.contains("Starting ZMQ Server..."))
+                        {
+                            LOGGER.info("Go plugin started successfully...");
+                            pluginInitPromise.complete("ZMQ Server Started Successfully");
+                        }
                     }
                 }
                 catch (IOException e)
                 {
                     pluginInitPromise.fail("Error reading Go plugin output: " + e.getMessage());
                 }
+            }).start();
 
-                // Timeout handling
-                Main.vertx().setTimer(5000, id ->
-                {
-                    if (!pluginInitPromise.future().isComplete())
-                    {
-                        LOGGER.warning("Timeout: Failed to detect ZMQ Server startup within 5 seconds");
-                        stopGOPlugin(); // Call stop function
-                        pluginInitPromise.fail("Timeout: Failed to detect ZMQ Server startup");
-                    }
-                });
-            }
-            catch (IOException e)
+            // Add a timeout mechanism
+            Main.vertx().setTimer(5000, id ->
             {
-                pluginInitPromise.fail("Failed to start Go Plugin: " + e.getMessage());
-            }
-        });
+                if (!pluginInitPromise.future().isComplete())
+                {
+                    pluginInitPromise.fail("Timeout: Failed to detect ZMQ Server startup within 5 seconds");
+                    process.destroy(); // Kill the process if it's still running
+                }
+            });
+
+        }
+        catch (IOException e)
+        {
+            pluginInitPromise.fail("Failed to start Go Plugin: " + e.getMessage());
+        }
+
+        return pluginInitPromise.future();
     }
 
-    // ✅ New method to stop the Go Plugin process
-    public static Future<String> stopGOPlugin()
+    // handle executeblocking  operation
+    public static <T> Future<T> executeBlockingOperation(Supplier<Future<T>> operation)
     {
-        Promise<String> promise = Promise.promise();
-
-        if (goPluginProcess!=null && goPluginProcess.isAlive())
+        return Main.vertx().executeBlocking(promise ->
         {
-            goPluginProcess.destroy(); // Try to terminate the process
-            LOGGER.info("Go Plugin process terminated.");
-            promise.complete("Go Plugin Stopped Successfully");
-        }
-        else
-        {
-            LOGGER.warning("Go Plugin process is not running.");
-            promise.fail("Go Plugin process is not running.");
-        }
-        return promise.future();
+            operation.get()
+            .onSuccess(promise::complete)
+            .onFailure(promise::fail);
+        });
     }
 
     // check ping is successful or not
@@ -132,7 +133,7 @@ public class Utils
         });
     }
 
-    // check port is reachable
+    // check port is reachable using tcp connection
     public static Future<Boolean> checkPort(String ip, Integer port)
     {
         return Main.vertx().executeBlocking(promise ->

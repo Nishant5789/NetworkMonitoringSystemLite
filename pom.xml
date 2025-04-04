@@ -65,7 +65,14 @@
       <version>0.5.2</version>
     </dependency>
 
-<!--    &lt;!&ndash; SLF4J API &ndash;&gt;-->
+    <dependency>
+      <groupId>com.itextpdf</groupId>
+      <artifactId>itext7-core</artifactId>
+      <version>7.1.15</version>
+    </dependency>
+
+
+    <!--    &lt;!&ndash; SLF4J API &ndash;&gt;-->
 <!--    <dependency>-->
 <!--      <groupId>org.slf4j</groupId>-->
 <!--      <artifactId>slf4j-api</artifactId>-->

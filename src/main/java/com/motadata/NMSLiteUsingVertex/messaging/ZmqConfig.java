@@ -46,8 +46,7 @@ public class ZmqConfig
     {
         try
         {
-            push.setHWM(hwm);
-            push.setSendTimeOut(timeout);
+            pull.setLinger(linger);
             push.connect(pushAddress);
         }
         catch (Exception err)
@@ -65,7 +64,6 @@ public class ZmqConfig
         {
             pull.setLinger(linger);
             pull.setHWM(hwm);
-            pull.setReceiveTimeOut(timeout);
             pull.bind(pullAddress);
         }
         catch (Exception e)
@@ -87,7 +85,7 @@ public class ZmqConfig
             }
             catch (Exception ignored)
             {
-                // Log if needed
+                LOGGER.severe(ignored.getMessage());
             }
         }
     }
@@ -103,7 +101,7 @@ public class ZmqConfig
             }
             catch (Exception ignored)
             {
-                // Log if needed
+                LOGGER.severe(ignored.getMessage());
             }
         }
     }

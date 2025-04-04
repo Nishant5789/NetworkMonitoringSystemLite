@@ -42,13 +42,13 @@ public class Main
     private static final Logger LOGGER = AppLogger.getLogger();
 
     private static final Vertx vertx = Vertx.vertx(new VertxOptions()
-    .setWorkerPoolSize(VERTX_WORKER_POOL_SIZE)
-    .setEventLoopPoolSize(Runtime.getRuntime().availableProcessors())
-    .setEventBusOptions(new EventBusOptions()
-    .setConnectTimeout(EVENT_BUS_CONNECTION_TIMEOUT)
-    .setIdleTimeout(EVENT_BUS_IDLE_TIMEOUT)
-    .setReconnectAttempts(EVENT_BUS_RECONNECT_ATTEMPTS)
-    .setReconnectInterval(EVENT_BUS_RECONNECT_INTERVAL))
+        .setWorkerPoolSize(VERTX_WORKER_POOL_SIZE)
+        .setEventLoopPoolSize(Runtime.getRuntime().availableProcessors())
+        .setEventBusOptions( new EventBusOptions()
+        .setConnectTimeout(EVENT_BUS_CONNECTION_TIMEOUT)
+        .setIdleTimeout(EVENT_BUS_IDLE_TIMEOUT)
+        .setReconnectAttempts(EVENT_BUS_RECONNECT_ATTEMPTS)
+        .setReconnectInterval(EVENT_BUS_RECONNECT_INTERVAL))
     );
 
     // return vertex instance
@@ -91,8 +91,6 @@ public class Main
             ZmqConfig.closePushSocketSilently();
             ZmqConfig.closePullSocketSilently();
 
-            // stop goPlugin
-            Utils.stopGOPlugin();
 
             vertx.close(responce ->
             {
@@ -142,7 +140,6 @@ public class Main
             {
                 promise.fail(responce.cause());
             }
-        })
-        );
+        }));
     }
 }

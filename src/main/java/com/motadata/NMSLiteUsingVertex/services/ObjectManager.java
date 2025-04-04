@@ -55,23 +55,13 @@ public class ObjectManager extends AbstractVerticle
           return Future.failedFuture("Discovery is incomplete for your provided IP");
         }
 
-        var objectPayload = createObject(discoveryRecord, pollInterval);
-
-        return Main.vertx().<Void>executeBlocking(promise ->
-        {
-          QueryHandler.save(PROVISIONED_OBJECTS_TABLE, createProvisionObjectPayload(discoveryRecord, pollInterval))
-            .onSuccess(promise::complete)
-            .onFailure(promise::fail);
-        }).map(v -> objectPayload);
+        return Utils.executeBlockingOperation(() -> QueryHandler.save(PROVISIONED_OBJECTS_TABLE, createProvisionObjectPayload(discoveryRecord, pollInterval)))
+        .map(v -> createObject(discoveryRecord, pollInterval));
       })
       .compose(objectPayload ->
       {
-        return Main.vertx().<JsonObject>executeBlocking(promise ->
-        {
-          QueryHandler.getOneByField(PROVISIONED_OBJECTS_TABLE, IP_KEY, ip)
-            .onSuccess(promise::complete)
-            .onFailure(promise::fail);
-        }).map(provisionedObjectRecord -> objectPayload.put(OBJECT_ID_KEY, provisionedObjectRecord.getInteger(OBJECT_ID_KEY)));
+        return Utils.executeBlockingOperation(() -> QueryHandler.getOneByField(PROVISIONED_OBJECTS_TABLE, IP_KEY, ip))
+        .map(provisionedObjectRecord -> objectPayload.put(OBJECT_ID_KEY, provisionedObjectRecord.getInteger(OBJECT_ID_KEY)));
       })
       .onSuccess(objectPayload ->
       {
@@ -105,10 +95,9 @@ public class ObjectManager extends AbstractVerticle
         if (timeSinceLastPoll >= object.getInteger(POLL_INTERVAL_KEY))
         {
           objectToPoll.add(object);
-
-          Main.vertx().eventBus().send(POLLING_EVENT, objectToPoll);
         }
       }
+      Main.vertx().eventBus().send(POLLING_EVENT, objectToPoll);
       LOGGER.info("Object sent for polling: " + objectToPoll.encodePrettily());
     });
   }

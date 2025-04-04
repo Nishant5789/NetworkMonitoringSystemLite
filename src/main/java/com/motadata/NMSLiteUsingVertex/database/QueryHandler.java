@@ -19,23 +19,22 @@ import static com.motadata.NMSLiteUsingVertex.utils.Constants.*;
 
 public class QueryHandler
 {
-  // Instance-level pool
   private static final Pool pool = DatabaseClient.getPool();
 
   // Generalized save
   public static Future<Void> save(String tableName, JsonObject payload)
   {
-    StringBuilder columns = new StringBuilder();
+    var columns = new StringBuilder();
 
-    StringBuilder placeholders = new StringBuilder();
+    var placeholders = new StringBuilder();
 
     var tuple = Tuple.tuple();
 
-    int index = 1;
+    var index = 1;
 
-    for (Map.Entry<String, Object> entry : payload.getMap().entrySet())
+    for (var entry : payload.getMap().entrySet())
     {
-      Object value = entry.getValue();
+      var value = entry.getValue();
 
       columns.append(entry.getKey());
       placeholders.append("$").append(index++);
@@ -98,11 +97,11 @@ public class QueryHandler
       {
         if (rows.size() == 0) return null;
 
-        Row row = rows.iterator().next();
+        var row = rows.iterator().next();
 
         var obj = new JsonObject();
 
-        for (int i = 0; i < row.size(); i++)
+        for (var i = 0; i < row.size(); i++)
         {
           obj.put(row.getColumnName(i), row.getValue(i));
         }
@@ -121,9 +120,9 @@ public class QueryHandler
 
       var row = rows.iterator().next();
 
-      JsonObject obj = new JsonObject();
+      var obj = new JsonObject();
 
-      for (int i = 0; i < row.size(); i++)
+      for (var i = 0; i < row.size(); i++)
       {
         obj.put(row.getColumnName(i), row.getValue(i));
       }
@@ -198,9 +197,9 @@ public class QueryHandler
 
     var index = 1;
 
-    for (Map.Entry<String, Object> entry : payload.getMap().entrySet())
+    for (var entry : payload.getMap().entrySet())
     {
-      Object value = entry.getValue();
+      var value = entry.getValue();
 
       setClause.append(entry.getKey()).append(" = $").append(index++);
 

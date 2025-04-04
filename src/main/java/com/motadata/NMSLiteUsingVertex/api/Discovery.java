@@ -37,7 +37,7 @@ public class Discovery
     // PUT  /api/discovery - update discovery
     router.put("/:id").handler(Discovery::updateDiscovery);
 
-    // GET /api/discovery - run discovery
+    // POST /api/discovery - run discovery
     router.post("/run").handler(Discovery::handleRunDiscovery);
 
     // DELETE /api/discovery - delete discovery
@@ -162,7 +162,11 @@ public class Discovery
 
     ctx.vertx().<JsonObject>executeBlocking(promise ->
       {
-         QueryHandler.getOneById(DISCOVERY_TABLE, discoveryId).onSuccess(promise::complete).onFailure(promise::fail);
+
+         QueryHandler.getOneById(DISCOVERY_TABLE, discoveryId)
+         .onSuccess(promise::complete)
+         .onFailure(promise::fail);
+
       })
       .compose(discoveryRecord ->
       {
@@ -185,7 +189,6 @@ public class Discovery
              .onSuccess(promise::complete)
              .onFailure(promise::fail);
         }).map(v -> eventBusMsg.body().toString());
-
       })
       .onSuccess(eventBusSuccessMsg ->
       {
